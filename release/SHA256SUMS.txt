@@ -1,0 +1,4 @@
+dea80759869b498bdba7e0695e5de0094cc1a78a859a302b01489c463fc4752c  Pot Translate Next_3.0.7_x64_en-US.msi
+cb0475e4a90a27c8c54587a04c314d79923390327f74ee583b82de55e1afe7fb  Pot Translate Next_3.0.7_x64_zh-CN.msi
+cf45e4bc8f7a6d7d87f419cf221718a68ea4f8721428b12b47ee64df1f57c81f  Pot Translate Next_3.0.8_x64_en-US.msi
+e04a607ad20eb0cb75d63f8f5a696b96e96384330f9aae1eb519c6c8531b62c8  Pot Translate Next_3.0.8_x64_zh-CN.msi

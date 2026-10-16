@@ -1,0 +1,20 @@
+.config-item {
+    margin: 10px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.input-translate-page {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 100%;
+}
+
+.input-translation-source {
+    max-height: 42vh;
+}
+
+.input-translation-source .sentence-source-input {
+    min-height: clamp(160px, 28vh, 280px);
+}

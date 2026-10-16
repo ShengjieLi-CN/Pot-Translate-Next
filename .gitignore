@@ -1,0 +1,25 @@
+# Release installers are distributed via GitHub Releases, not stored in the repo
+*.msi
+
+# OS / editor
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.sw?
+.idea/
+.vscode/ignore
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.local

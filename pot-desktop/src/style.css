@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    border-radius: 10px !important;
+    background: transparent !important;
+    overflow: hidden;
+}
+
+*::-webkit-scrollbar {
+    width: 5px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #c0c1c550;
+    border-radius: 5px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #c0c1c550;
+}
+
+.sentence-source {
+    position: relative;
+    width: 100%;
+    line-height: 1.6;
+}
+
+.sentence-source-backdrop,
+.sentence-source-input {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    tab-size: 4;
+}
+
+.sentence-source-backdrop {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    color: transparent;
+}
+
+.sentence-source-input {
+    display: block;
+    position: relative;
+    min-height: 80px;
+    resize: none;
+    outline: none;
+    overflow: hidden;
+    background: transparent;
+}
+
+.sentence-translation {
+    line-height: 1.8;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.sentence-target {
+    cursor: text;
+    border-radius: 2px;
+}
+
+.sentence-highlight {
+    color: inherit;
+    background-color: #ffeac2;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+.dark .sentence-highlight {
+    background-color: #705a28;
+}
+
+.sentence-target:focus-visible {
+    outline: 2px solid #c99a38;
+    outline-offset: 2px;
+}
