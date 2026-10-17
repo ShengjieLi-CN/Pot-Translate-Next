@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '3.1.2',
+    [string]$Version = '3.2.0',
     [string]$Publisher = 'CN=Shengjie Li'
 )
 $ErrorActionPreference = 'Stop'
@@ -54,7 +54,6 @@ $manifest = @"
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Resources>
-    <Resource Language="en-US" />
     <Resource Language="zh-CN" />
   </Resources>
   <Dependencies>

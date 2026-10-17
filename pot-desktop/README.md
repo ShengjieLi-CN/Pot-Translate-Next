@@ -1,6 +1,10 @@
 # Pot Translate Next
 
-基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，新增同声传译、截图原位翻译、主页输入翻译和原文、译文逐句联动高亮。当前本地检查版本 **3.1.2**。
+基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，支持同声传译、截图原位翻译、划词翻译、主页输入翻译和原文、译文逐句联动高亮。当前发布版本 **3.2.0**。
+
+## 3.2.0 Windows MSI 发布
+
+[下载简体中文 Windows x64 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.2.0)。本版汇总划词翻译、段落保持、STT 模型测试、同声传译和截图翻译，并新增主窗口左上角置顶按钮。安装后需自行配置翻译、OCR 或 STT 服务及凭据。
 
 ## 3.1.2 同声传译
 
@@ -10,7 +14,7 @@
 
 [查看同声传译界面预览（模拟服务）](asset/live-interpretation-preview.png)
 
-本地检查版使用 `.scripts/build-local.ps1` 编译，不生成安装包。待用户检查通过后再打包。
+本地检查使用 `.scripts/build-local.ps1`；正式 MSI 使用 `.scripts/build-msi.ps1` 构建。
 
 ## 3.1.0 截图翻译
 
@@ -99,14 +103,14 @@ rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --compo
 
 脚本会自动选择 MSVC 工具链，不改变用户全局的 Rust 默认设置。Tauri 会下载 WiX 3 打包工具和 WebView2 安装引导程序；系统已安装 WebView2 时无需重复安装。
 
-安装包输出到 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/`，分别提供简体中文和英文版本。MSI 构建使用独立的 `Pot Translate Next` 名称和应用标识，清空上游自动更新地址。本地构建没有配置代码签名证书。
+安装包输出到 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/`，仅提供简体中文版。MSI 构建使用独立的 `Pot Translate Next` 名称和应用标识，清空上游自动更新地址。本地构建没有配置代码签名证书。
 
 ## 验证
 
--   `pnpm test`：36 项测试，包括分句、截图文本恢复及实时音频、说话人关联、字幕和请求生命周期测试。
+-   `pnpm test`：48 项测试，包括分句与段落、划词、截图文本恢复、实时音频、说话人关联、字幕和请求生命周期测试。
 -   `pnpm build`：前端生产构建。
 -   浏览器交互验证：使用生产构建及模拟 Tauri / 翻译响应，检查主页默认入口、原有控件和主题、语言检测调用、服务切换、草稿保留、高亮、中文输入法、动态翻译、清空取消、错误恢复、无服务状态及 800px 窗口布局；同时回归原有弹窗。
--   `.scripts/build-msi.ps1`：Windows x64 release 原生编译和中、英文 MSI 打包均已通过。
+-   `.scripts/build-msi.ps1`：Windows x64 release 原生编译和中文版 MSI 打包已通过。
 
 当前开发环境已安装 Rust MSVC / rustfmt、Visual Studio 2022 C++ Build Tools 和 Windows SDK。真实翻译服务仍需在应用中配置后进行端到端验证。
 

@@ -23,6 +23,7 @@ import he_IL from './locales/he_IL.json';
 // http://www.lingoes.net/zh/translator/langcode.htm
 
 i18n.use(initReactI18next).init({
+    lng: 'zh_cn',
     fallbackLng: {
         zh_tw: ['zh_cn'],
         zh_cn: ['zh_tw'],

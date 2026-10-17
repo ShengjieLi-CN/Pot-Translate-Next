@@ -31,7 +31,7 @@ const windowMap = {
 export default function App() {
     const [devMode] = useConfig('dev_mode', false);
     const [appTheme] = useConfig('app_theme', 'system');
-    const [appLanguage] = useConfig('app_language', 'en');
+    const [appLanguage] = useConfig('app_language', 'zh_cn');
     const [appFont] = useConfig('app_font', 'default');
     const [appFallbackFont] = useConfig('app_fallback_font', 'default');
     const [appFontSize] = useConfig('app_font_size', 16);
@@ -102,13 +102,13 @@ export default function App() {
 
     useEffect(() => {
         if (appLanguage !== null) {
-            i18n.changeLanguage(appLanguage);
+            i18n.changeLanguage('zh_cn');
         }
     }, [appLanguage]);
 
     useEffect(() => {
         if (appFont !== null && appFallbackFont !== null) {
-            const fontFamily = (font) => font === 'default' ? 'sans-serif' : JSON.stringify(font);
+            const fontFamily = (font) => (font === 'default' ? 'sans-serif' : JSON.stringify(font));
             document.documentElement.style.fontFamily = `${fontFamily(appFont)},${fontFamily(appFallbackFont)},sans-serif`;
         }
         if (appFontSize !== null) {

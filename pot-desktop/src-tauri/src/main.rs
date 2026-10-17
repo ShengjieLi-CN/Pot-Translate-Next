@@ -80,8 +80,13 @@ fn main() {
             // Init Config
             info!("Init Config Store");
             init_config(app);
+            let first_run = is_first_run();
+            // The maintained distribution uses Simplified Chinese UI and tray.
+            if get("app_language").and_then(|v| v.as_str().map(str::to_owned)).as_deref() != Some("zh_cn") {
+                set("app_language", "zh_cn");
+            }
             // Check First Run
-            if is_first_run() {
+            if first_run {
                 // Open Config Window
                 info!("First Run, opening config window");
                 config_window();

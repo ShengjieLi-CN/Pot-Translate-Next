@@ -1,8 +1,9 @@
 import { useLocation, useRoutes } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import { appWindow } from '@tauri-apps/api/window';
-import { Card, Divider } from '@nextui-org/react';
+import { Button, Card, Divider, Tooltip } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
+import { BsPinFill } from 'react-icons/bs';
 
 import WindowControl from '../../components/WindowControl';
 import SideBar from './components/SideBar';
@@ -16,6 +17,24 @@ export default function Config() {
     const { t } = useTranslation();
     const location = useLocation();
     const page = useRoutes(routes);
+    const [pinned, setPinned] = useState(false);
+    const [pinPending, setPinPending] = useState(false);
+    const [pinError, setPinError] = useState('');
+    const pinLabel = t(pinned ? 'window_unpin' : 'window_pin');
+
+    const togglePin = async () => {
+        if (pinPending) return;
+        setPinPending(true);
+        setPinError('');
+        try {
+            await appWindow.setAlwaysOnTop(!pinned);
+            setPinned(!pinned);
+        } catch (error) {
+            setPinError(`${t('window_pin_failed')}：${String(error)}`);
+        } finally {
+            setPinPending(false);
+        }
+    };
 
     useEffect(() => {
         if (appWindow.label === 'config') {
@@ -33,9 +52,34 @@ export default function Config() {
                     osType === 'Linux' && 'rounded-l-[10px] border-1'
                 } border-r-1 border-default-100 select-none cursor-default`}
             >
-                <div className='h-[35px] p-[5px]'>
+                <div className='h-[35px] px-[5px] flex items-center'>
+                    <Tooltip content={pinError || pinLabel}>
+                        <Button
+                            isIconOnly
+                            size='sm'
+                            variant={pinned ? 'flat' : 'light'}
+                            color={pinned ? 'primary' : 'default'}
+                            className='h-[25px] min-w-[25px] w-[25px] rounded-md shrink-0'
+                            aria-label={pinLabel}
+                            aria-pressed={pinned}
+                            isDisabled={pinPending}
+                            onPress={togglePin}
+                        >
+                            <BsPinFill
+                                className={`text-[17px] ${pinned ? 'text-primary' : 'text-default-400 rotate-45'}`}
+                            />
+                        </Button>
+                    </Tooltip>
+                    {pinError && (
+                        <span
+                            role='alert'
+                            className='sr-only'
+                        >
+                            {pinError}
+                        </span>
+                    )}
                     <div
-                        className='w-full h-full'
+                        className='flex-1 h-full'
                         data-tauri-drag-region='true'
                     />
                 </div>

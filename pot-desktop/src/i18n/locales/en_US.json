@@ -1,5 +1,8 @@
 {
     "translation": {
+        "window_pin": "Pin window on top",
+        "window_unpin": "Unpin window",
+        "window_pin_failed": "Could not change window pinning",
         "selection_nav": "Selection translation",
         "live_nav": "Live interpretation",
         "screenshot": {

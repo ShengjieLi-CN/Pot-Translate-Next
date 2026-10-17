@@ -17,7 +17,6 @@ import { invoke } from '@tauri-apps/api';
 import { useTheme } from 'next-themes';
 
 import { useConfig } from '../../../../hooks/useConfig';
-import { LanguageFlag } from '../../../../utils/language';
 import { useToastStyle } from '../../../../hooks';
 import { osType } from '../../../../utils/env';
 
@@ -28,7 +27,6 @@ export default function General() {
     const [fontList, setFontList] = useState(null);
     const [checkUpdate, setCheckUpdate] = useConfig('check_update', true);
     const [serverPort, setServerPort] = useConfig('server_port', 60828);
-    const [appLanguage, setAppLanguage] = useConfig('app_language', 'en');
     const [appTheme, setAppTheme] = useConfig('app_theme', 'system');
     const [appFont, setAppFont] = useConfig('app_font', 'default');
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
@@ -42,31 +40,9 @@ export default function General() {
     const [proxyUsername, setProxyUsername] = useConfig('proxy_username', '');
     const [proxyPassword, setProxyPassword] = useConfig('proxy_password', '');
     const [noProxy, setNoProxy] = useConfig('no_proxy', 'localhost,127.0.0.1');
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const { setTheme } = useTheme();
     const toastStyle = useToastStyle();
-
-    const languageName = {
-        zh_cn: '简体中文',
-        zh_tw: '繁體中文',
-        en: 'English',
-        ja: '日本語',
-        ko: '한국어',
-        fr: 'Français',
-        es: 'Español',
-        ru: 'Русский',
-        de: 'Deutsch',
-        it: 'Italiano',
-        tr: 'Türkçe',
-        pt_pt: 'Português',
-        pt_br: 'Português (Brasil)',
-        nb_no: 'Norsk Bokmål',
-        nn_no: 'Norsk Nynorsk',
-        fa: 'فارسی',
-        uk: 'Українська',
-        ar: 'العربية',
-        he: 'עִבְרִית',
-    };
 
     useEffect(() => {
         isEnabled().then((v) => {
@@ -151,142 +127,7 @@ export default function General() {
                 <CardBody>
                     <div className='config-item'>
                         <h3 className='my-auto'>{t('config.general.app_language')}</h3>
-                        {appLanguage !== null && (
-                            <Dropdown>
-                                <DropdownTrigger>
-                                    <Button
-                                        variant='bordered'
-                                        startContent={<span className={`fi fi-${LanguageFlag[appLanguage]}`} />}
-                                    >
-                                        {languageName[appLanguage]}
-                                    </Button>
-                                </DropdownTrigger>
-                                <DropdownMenu
-                                    aria-label='app language'
-                                    className='max-h-[40vh] overflow-y-auto'
-                                    onAction={(key) => {
-                                        setAppLanguage(key);
-                                        i18n.changeLanguage(key);
-                                        invoke('update_tray', { language: key, copyMode: '' });
-                                    }}
-                                >
-                                    <DropdownItem
-                                        key='zh_cn'
-                                        startContent={<span className={`fi fi-${LanguageFlag.zh_cn}`} />}
-                                    >
-                                        简体中文
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='zh_tw'
-                                        startContent={<span className={`fi fi-${LanguageFlag.zh_cn}`} />}
-                                    >
-                                        繁體中文
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='en'
-                                        startContent={<span className={`fi fi-${LanguageFlag.en}`} />}
-                                    >
-                                        English
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='ja'
-                                        startContent={<span className={`fi fi-${LanguageFlag.ja}`} />}
-                                    >
-                                        日本語
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='ko'
-                                        startContent={<span className={`fi fi-${LanguageFlag.ko}`} />}
-                                    >
-                                        한국어
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='fr'
-                                        startContent={<span className={`fi fi-${LanguageFlag.fr}`} />}
-                                    >
-                                        Français
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='de'
-                                        startContent={<span className={`fi fi-${LanguageFlag.de}`} />}
-                                    >
-                                        Deutsch
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='es'
-                                        startContent={<span className={`fi fi-${LanguageFlag.es}`} />}
-                                    >
-                                        Español
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='ru'
-                                        startContent={<span className={`fi fi-${LanguageFlag.ru}`} />}
-                                    >
-                                        Русский
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='it'
-                                        startContent={<span className={`fi fi-${LanguageFlag.it}`} />}
-                                    >
-                                        Italiano
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='tr'
-                                        startContent={<span className={`fi fi-${LanguageFlag.tr}`} />}
-                                    >
-                                        Türkçe
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='pt_pt'
-                                        startContent={<span className={`fi fi-${LanguageFlag.pt_pt}`} />}
-                                    >
-                                        Português
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='pt_br'
-                                        startContent={<span className={`fi fi-${LanguageFlag.pt_br}`} />}
-                                    >
-                                        Português (Brasil)
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='nb_no'
-                                        startContent={<span className={`fi fi-${LanguageFlag.nb_no}`} />}
-                                    >
-                                        Norsk Bokmål
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='nn_no'
-                                        startContent={<span className={`fi fi-${LanguageFlag.nn_no}`} />}
-                                    >
-                                        Norsk Nynorsk
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='fa'
-                                        startContent={<span className={`fi fi-${LanguageFlag.fa}`} />}
-                                    >
-                                        فارسی
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='uk'
-                                        startContent={<span className={`fi fi-${LanguageFlag.uk}`} />}
-                                    >
-                                        Українська
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='ar'
-                                        startContent={<span className={`fi fi-${LanguageFlag.ar}`} />}
-                                    >
-                                        العربية
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='he'
-                                        startContent={<span className={`fi fi-${LanguageFlag.he}`} />}
-                                    >
-                                        עִבְרִית
-                                    </DropdownItem>
-                                </DropdownMenu>
-                            </Dropdown>
-                        )}
+                        <span className='text-default-500'>简体中文</span>
                     </div>
                     <div className='config-item'>
                         <h3 className='my-auto'>{t('config.general.app_theme')}</h3>

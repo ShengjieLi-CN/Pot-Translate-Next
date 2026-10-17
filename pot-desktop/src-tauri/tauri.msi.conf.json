@@ -11,7 +11,7 @@
             "targets": ["msi"],
             "windows": {
                 "wix": {
-                    "language": ["zh-CN", "en-US"]
+                    "language": ["zh-CN"]
                 }
             }
         },

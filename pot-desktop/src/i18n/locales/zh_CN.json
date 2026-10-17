@@ -1,5 +1,8 @@
 {
     "translation": {
+        "window_pin": "窗口置顶",
+        "window_unpin": "取消置顶",
+        "window_pin_failed": "置顶操作失败",
         "selection_nav": "划词翻译",
         "live_nav": "同声传译",
         "screenshot": {
