@@ -13,15 +13,6 @@
 
 [查看完整更新与安装说明](release/release-notes-3.2.0.md)。安装后需要自行配置翻译、OCR 或 STT 服务及凭据。校验文件与中文版 MSI 一同提供。
 
-## 3.1.2 同声传译
-
-左侧“输入翻译”下方新增“同声传译”。支持 Windows 系统声音与麦克风连续分段转写、自定义 STT 兼容接口、按音色对应的声纹/说话人信息、双语时间轴、暂停继续、音频回放和导出。先在该页面填写 STT 接口、模型和凭据，并选择已启用的文本翻译服务；本版本不预置模型服务。
-
-[查看 STT 协议、说话人模式与使用说明](pot-desktop/docs/live-stt.md)
-
-[查看同声传译界面预览（模拟服务）](pot-desktop/asset/live-interpretation-preview.png)
-
-本地检查使用 `pot-desktop/.scripts/build-local.ps1`；正式 MSI 使用 `pot-desktop/.scripts/build-msi.ps1` 构建。
 
 ## 3.1.0 截图翻译
 
