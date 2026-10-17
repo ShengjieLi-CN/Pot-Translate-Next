@@ -7,6 +7,8 @@ import { useTheme } from 'next-themes';
 
 import { invoke } from '@tauri-apps/api/tauri';
 import Screenshot from './window/Screenshot';
+import ImageTranslate from './window/Screenshot/ImageTranslate';
+import SelectionTranslate from './window/SelectionTranslate';
 import Translate from './window/Translate';
 import Recognize from './window/Recognize';
 import Updater from './window/Updater';
@@ -18,7 +20,9 @@ import './i18n';
 
 const windowMap = {
     translate: <Translate />,
+    selection_translate: <SelectionTranslate />,
     screenshot: <Screenshot />,
+    image_translate: <ImageTranslate />,
     recognize: <Recognize />,
     config: <Config />,
     updater: <Updater />,
@@ -104,9 +108,8 @@ export default function App() {
 
     useEffect(() => {
         if (appFont !== null && appFallbackFont !== null) {
-            document.documentElement.style.fontFamily = `"${appFont === 'default' ? 'sans-serif' : appFont}","${
-                appFallbackFont === 'default' ? 'sans-serif' : appFallbackFont
-            }"`;
+            const fontFamily = (font) => font === 'default' ? 'sans-serif' : JSON.stringify(font);
+            document.documentElement.style.fontFamily = `${fontFamily(appFont)},${fontFamily(appFallbackFont)},sans-serif`;
         }
         if (appFontSize !== null) {
             document.documentElement.style.fontSize = `${appFontSize}px`;

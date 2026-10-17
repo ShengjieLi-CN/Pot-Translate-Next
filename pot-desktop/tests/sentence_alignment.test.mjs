@@ -73,7 +73,7 @@ test('alignment follows requests even when a provider splits one translation int
         options({ onProgress: (parts) => progress.push(parts) })
     );
     assert.deepEqual(calls, ['Hello.', 'Next.']);
-    assert.equal(result, '你好。这是第一句。\n下一句。');
+    assert.equal(result, '你好。这是第一句。 下一句。');
     assert.equal(progress.at(-1)[0].text, 'Hello.');
     assert.equal(progress.at(-1)[0].translation, '你好。这是第一句。');
     assert.equal(progress[0][1].translation, '');
@@ -91,7 +91,64 @@ test('streaming updates only replace the current sentence', async () => {
     );
     assert.equal(progress[2][0].translation, '一。');
     assert.equal(progress[2][1].translation, 'partial');
-    assert.equal(joinTranslations(progress.at(-1)), '一。\n二。');
+    assert.equal(joinTranslations(progress.at(-1)), '一。 二。');
+});
+
+test('sentences in a source paragraph stay in one translated paragraph', async () => {
+    const result = await translateSentences(
+        'RNA structure is complex. Data is scarce. Prediction is difficult.',
+        async (text) =>
+            ({
+                'RNA structure is complex.': 'RNA结构复杂。',
+                'Data is scarce.': '数据稀缺。',
+                'Prediction is difficult.': '预测困难。',
+            })[text],
+        options()
+    );
+    assert.equal(result, 'RNA结构复杂。 数据稀缺。 预测困难。');
+    assert.equal(result.includes('\n'), false);
+});
+
+test('source paragraph breaks, blank lines and indentation survive streaming and final results', async () => {
+    const source = '  One. Two.\r\n\r\n\tThree.\nFour.  ';
+    const translated = { 'One.': '一。', 'Two.': '二。', 'Three.': '三。', 'Four.': '四。' };
+    const progress = [];
+    const result = await translateSentences(
+        source,
+        async (text, publish) => {
+            publish(translated[text]);
+            return translated[text];
+        },
+        options({ onProgress: (parts) => progress.push(parts) })
+    );
+    assert.equal(result, '  一。 二。\r\n\r\n\t三。\n四。  ');
+    assert.equal(joinTranslations(progress.at(-1)), result);
+    for (const parts of progress) {
+        for (const part of parts) assert.equal(source.slice(part.start, part.end), part.text);
+    }
+});
+
+test('Chinese sentences without source spaces remain in one readable English paragraph', async () => {
+    const result = await translateSentences(
+        '你好！世界。',
+        async (text) => (text === '你好！' ? 'Hello!' : 'World.'),
+        options()
+    );
+    assert.equal(result, 'Hello! World.');
+});
+
+test('provider-added line wrapping does not create extra paragraphs', async () => {
+    const progress = [];
+    const result = await translateSentences(
+        'First.\n\nSecond.',
+        async (_, publish) => {
+            publish('第一行\n第二行');
+            return '  第一句。\r\n\r\n第二句。  ';
+        },
+        options({ onProgress: (parts) => progress.push(parts) })
+    );
+    assert.equal(result, '第一句。 第二句。\n\n第一句。 第二句。');
+    assert.equal(progress[0][0].translation, '第一行 第二行');
 });
 
 test('superseded requests cannot publish streaming or final values, or start the next request', async () => {

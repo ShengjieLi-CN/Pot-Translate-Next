@@ -1,5 +1,11 @@
 # Release installers are distributed via GitHub Releases, not stored in the repo
 *.msi
+*.msix
+
+# Local verification artifacts
+/paragraph-ui.png
+.tools/
+.work/
 
 # OS / editor
 .DS_Store

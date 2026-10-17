@@ -1,0 +1,8 @@
+{
+    "build": { "beforeBuildCommand": "node node_modules/vite/bin/vite.js build" },
+    "package": { "productName": "Pot Translate Next" },
+    "tauri": {
+        "bundle": { "active": false, "identifier": "com.shengjieli.pot-translate-next" },
+        "updater": { "endpoints": [] }
+    }
+}

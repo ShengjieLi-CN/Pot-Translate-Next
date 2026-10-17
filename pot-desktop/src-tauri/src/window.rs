@@ -1,9 +1,11 @@
+#[cfg(target_os = "macos")]
 use std::fs;
 
 use crate::config::get;
 use crate::config::set;
 use crate::StringWrapper;
 use crate::APP;
+#[cfg(target_os = "macos")]
 use dirs::cache_dir;
 use log::{info, warn};
 use tauri::Manager;
@@ -224,18 +226,7 @@ fn translate_window() -> Window {
 }
 
 pub fn selection_translate() {
-    use selection::get_text;
-    // Get Selected Text
-    let text = get_text();
-    if !text.trim().is_empty() {
-        let app_handle = APP.get().unwrap();
-        // Write into State
-        let state: tauri::State<StringWrapper> = app_handle.state();
-        state.0.lock().unwrap().replace_range(.., &text);
-    }
-
-    let window = translate_window();
-    window.emit("new_text", text).unwrap();
+    crate::selection_translate::from_shortcut();
 }
 
 pub fn input_translate() {
@@ -269,15 +260,33 @@ pub fn text_translate(text: String) {
 }
 
 pub fn image_translate() {
-    let app_handle = APP.get().unwrap();
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state
-        .0
-        .lock()
-        .unwrap()
-        .replace_range(.., "[IMAGE_TRANSLATE]");
-    let window = translate_window();
-    window.emit("new_text", "[IMAGE_TRANSLATE]").unwrap();
+    let (window, exists) = build_window("image_translate", "Screenshot Translation");
+    if !exists {
+        let _ = window.set_min_size(Some(tauri::LogicalSize::new(640, 400)));
+        let _ = window.set_size(tauri::LogicalSize::new(1000, 700));
+        let _ = window.center();
+    }
+    let _ = window.emit("new_image", "");
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+#[tauri::command(async)]
+pub fn start_screenshot_translate(window: tauri::Window) {
+    // Hide the initiating app before taking the frozen screen image.
+    let _ = window.hide();
+    std::thread::sleep(std::time::Duration::from_millis(180));
+    ocr_translate();
+    #[cfg(not(target_os = "macos"))]
+    if let Some(capture) = APP.get().unwrap().get_window("screenshot") {
+        capture.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                let _ = window.show();
+            }
+        });
+    }
+    #[cfg(target_os = "macos")]
+    let _ = window.show();
 }
 
 pub fn recognize_window() {
@@ -313,8 +322,22 @@ pub fn recognize_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn screenshot_window() -> Window {
+fn screenshot_window(translate: bool) -> Window {
+    if let Some(window) = APP.get().unwrap().get_window("screenshot") {
+        let _ = window.set_focus();
+        return window;
+    }
+    crate::screenshot::set_translate_mode(translate);
     let (window, _exists) = build_window("screenshot", "Screenshot");
+
+    // WindowBuilder.position uses logical units, while the mouse and monitor
+    // coordinates are physical. Correct the position before entering fullscreen.
+    if let mouse_position::mouse_position::Mouse::Position { x, y } =
+        mouse_position::mouse_position::Mouse::get_mouse_position()
+    {
+        let monitor = get_current_monitor(x, y);
+        let _ = window.set_position(*monitor.position());
+    }
 
     window.set_skip_taskbar(true).unwrap();
     #[cfg(target_os = "macos")]
@@ -344,20 +367,27 @@ pub fn ocr_recognize() {
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
 
+        let _ = fs::remove_file(&app_cache_dir_path);
         let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
         println!("Screenshot path: {}", path);
-        if let Ok(_output) = std::process::Command::new("/usr/sbin/screencapture")
+        if let Ok(output) = std::process::Command::new("/usr/sbin/screencapture")
             .arg("-i")
             .arg("-r")
             .arg(path)
             .output()
         {
-            recognize_window();
+            if output.status.success() && app_cache_dir_path.exists() {
+                recognize_window();
+            }
         }
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let window = screenshot_window();
+        // A capture in progress owns its action until it closes.
+        if APP.get().unwrap().get_window("screenshot").is_some() {
+            return;
+        }
+        let window = screenshot_window(false);
         let window_ = window.clone();
         window.listen("success", move |event| {
             recognize_window();
@@ -377,26 +407,23 @@ pub fn ocr_translate() {
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
 
+        let _ = fs::remove_file(&app_cache_dir_path);
         let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
         println!("Screenshot path: {}", path);
-        if let Ok(_output) = std::process::Command::new("/usr/sbin/screencapture")
+        if let Ok(output) = std::process::Command::new("/usr/sbin/screencapture")
             .arg("-i")
             .arg("-r")
             .arg(path)
             .output()
         {
-            image_translate();
-            ();
+            if output.status.success() && app_cache_dir_path.exists() {
+                image_translate();
+            }
         }
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let window = screenshot_window();
-        let window_ = window.clone();
-        window.listen("success", move |event| {
-            image_translate();
-            window_.unlisten(event.id())
-        });
+        screenshot_window(true);
     }
 }
 

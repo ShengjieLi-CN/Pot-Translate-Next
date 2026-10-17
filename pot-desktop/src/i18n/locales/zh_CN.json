@@ -1,5 +1,22 @@
 {
     "translation": {
+        "selection_nav": "划词翻译",
+        "live_nav": "同声传译",
+        "screenshot": {
+            "title": "截图翻译", "description": "框选屏幕上的文字，译文直接覆盖原图区域，保留论文段落和双栏布局。支持切换原图对照。",
+            "start": "开始截图翻译", "configure_hotkey": "设置截图快捷键", "configure_services": "配置翻译与 OCR 服务",
+            "rules": "自动恢复 PDF 换行断词，忽略触及截图边缘的残缺文字；结合全文领域使用专业术语，保留标题、摘要、段落、公式、代码和英文缩写。",
+            "service_hint": "先配置文字识别服务和文本翻译服务。使用支持自定义提示词的模型服务可结合全文执行专业术语与纠错规则；普通翻译服务的术语质量取决于服务本身。截图会发送至所选 OCR 服务，识别文字会发送至所选翻译服务。",
+            "select_hint": "拖动框选翻译区域 · Esc 或右键退出",
+            "original": "截图原图", "source_language": "原文语言", "target_language": "译文语言", "translation_service": "翻译服务", "ocr_service": "文字识别服务",
+            "show_original": "查看原图", "show_translation": "查看译文", "copy": "复制译文", "copied": "译文已复制", "retry": "重试", "recapture": "重新截图", "close": "关闭",
+            "loading": "加载服务…", "recognizing": "正在识别文字…", "translating": "正在翻译…", "done": "翻译完成", "error": "翻译失败", "empty": "未配置服务",
+            "no_service": "请先在主窗口“服务设置”中启用至少一个文字识别服务和文本翻译服务，再点击重试。词典服务不适用于截图翻译。",
+            "no_text": "未识别到完整文字，请重新框选，避免截断文字。", "capture_failed": "截图加载失败，请重新截图。",
+            "unsupported_ocr": "当前 OCR 服务不支持所选语言，请切换识别服务或原文语言。", "unsupported_language": "当前翻译服务不支持此语言方向，请切换服务或语言。",
+            "standard_hint": "当前服务使用文本翻译；全文领域、专业术语和语义纠错规则需使用支持自定义提示词的模型服务。",
+            "domains": { "general": "通用领域", "biomedicine": "生物医学", "computer_science": "计算机科学", "physics": "物理", "literature": "文学" }
+        },
         "bilingual": {
             "mode": "翻译模式",
             "title": "英汉互译",

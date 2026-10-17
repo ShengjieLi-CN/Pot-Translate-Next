@@ -9,8 +9,14 @@ import Hotkey from '../pages/Hotkey';
 import Backup from '../pages/Backup';
 import About from '../pages/About';
 import InputTranslate from '../pages/InputTranslate';
+import ScreenshotTranslate from '../pages/ScreenshotTranslate';
+import LiveInterpretation from '../pages/LiveInterpretation';
+import SelectionTranslate from '../pages/SelectionTranslate';
 
 const routes = [
+    { path: '/selection', element: <SelectionTranslate /> },
+    { path: '/live', element: <LiveInterpretation /> },
+    { path: '/screenshot', element: <ScreenshotTranslate /> },
     {
         path: '/input',
         element: <InputTranslate />,

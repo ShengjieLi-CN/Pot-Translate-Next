@@ -1,100 +1,188 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { currentMonitor, appWindow } from '@tauri-apps/api/window';
+import { convertFileSrc, invoke } from '@tauri-apps/api/tauri';
 import { appCacheDir, join } from '@tauri-apps/api/path';
-import { currentMonitor } from '@tauri-apps/api/window';
-import { convertFileSrc } from '@tauri-apps/api/tauri';
-import { appWindow } from '@tauri-apps/api/window';
-import { emit } from '@tauri-apps/api/event';
-import { warn } from 'tauri-plugin-log-api';
-import { invoke } from '@tauri-apps/api';
+import { useTranslation } from 'react-i18next';
+import TranslationSurface from './TranslationSurface';
+import { screenshotSelection } from '../../utils/screenshot_translation.mjs';
 
 export default function Screenshot() {
+    const { t } = useTranslation();
     const [imgurl, setImgurl] = useState('');
-    const [isMoved, setIsMoved] = useState(false);
-    const [isDown, setIsDown] = useState(false);
-    const [mouseDownX, setMouseDownX] = useState(0);
-    const [mouseDownY, setMouseDownY] = useState(0);
-    const [mouseMoveX, setMouseMoveX] = useState(0);
-    const [mouseMoveY, setMouseMoveY] = useState(0);
+    const [translate, setTranslate] = useState(false);
+    const [selection, setSelection] = useState(null);
+    const [capture, setCapture] = useState(null);
+    const [error, setError] = useState('');
+    const start = useRef(null);
+    const image = useRef(null);
+    const working = useRef(false);
+    const mounted = useRef(true);
 
-    const imgRef = useRef();
+    const loadScreenshot = async () => {
+        setError('');
+        setCapture(null);
+        setSelection(null);
+        start.current = null;
+        working.current = true;
+        try {
+            await appWindow.hide();
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const monitor = await currentMonitor();
+            if (!monitor) throw new Error(t('screenshot.capture_failed'));
+            await invoke('screenshot', { x: monitor.position.x, y: monitor.position.y });
+            const path = await join(await appCacheDir(), 'pot_screenshot.png');
+            if (mounted.current) setImgurl(`${convertFileSrc(path)}?capture=${Date.now()}`);
+        } catch (e) {
+            if (mounted.current) {
+                setError(String(e));
+                await appWindow.show();
+            }
+        } finally {
+            working.current = false;
+        }
+    };
 
     useEffect(() => {
-        currentMonitor().then((monitor) => {
-            const position = monitor.position;
-            invoke('screenshot', { x: position.x, y: position.y }).then(() => {
-                appCacheDir().then((appCacheDirPath) => {
-                    join(appCacheDirPath, 'pot_screenshot.png').then((filePath) => {
-                        setImgurl(convertFileSrc(filePath));
-                    });
-                });
-            });
-        });
+        mounted.current = true;
+        invoke('screenshot_translate_mode')
+            .then((value) => {
+                if (mounted.current) setTranslate(value);
+            })
+            .catch((e) => setError(String(e)));
+        loadScreenshot();
+        return () => {
+            mounted.current = false;
+        };
     }, []);
 
+    const region = (end) =>
+        screenshotSelection(
+            start.current,
+            end,
+            { width: window.innerWidth, height: window.innerHeight },
+            { width: image.current.naturalWidth, height: image.current.naturalHeight }
+        );
+
+    const finish = async (event) => {
+        if (!start.current || working.current || event.button !== 0) return;
+        const area = region({ x: event.clientX, y: event.clientY });
+        start.current = null;
+        if (area.rect.width < 4 || area.rect.height < 4) {
+            setSelection(null);
+            return;
+        }
+        setSelection(area.rect);
+        setError('');
+        working.current = true;
+        try {
+            await invoke('cut_image', area.crop);
+            if (translate) {
+                const base64 = await invoke('get_base64');
+                if (!base64) throw new Error(t('screenshot.capture_failed'));
+                setCapture({ id: Date.now(), base64, width: area.crop.width, height: area.crop.height });
+            } else {
+                await appWindow.hide();
+                await appWindow.emit('success');
+                await appWindow.close();
+            }
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            working.current = false;
+        }
+    };
+
     return (
-        <>
-            <img
-                ref={imgRef}
-                className='fixed top-0 left-0 w-full select-none'
-                src={imgurl}
-                draggable={false}
-                onLoad={() => {
-                    if (imgurl !== '' && imgRef.current.complete) {
-                        void appWindow.show();
-                        void appWindow.setFocus();
-                        void appWindow.setResizable(false);
-                    }
-                }}
-            />
-            <div
-                className={`fixed bg-[#2080f020] border border-solid border-sky-500 ${!isMoved && 'hidden'}`}
-                style={{
-                    top: Math.min(mouseDownY, mouseMoveY),
-                    left: Math.min(mouseDownX, mouseMoveX),
-                    bottom: screen.height - Math.max(mouseDownY, mouseMoveY),
-                    right: screen.width - Math.max(mouseDownX, mouseMoveX),
-                }}
-            />
-            <div
-                className='fixed top-0 left-0 bottom-0 right-0 cursor-crosshair select-none'
-                onMouseDown={(e) => {
-                    if (e.buttons === 1) {
-                        setIsDown(true);
-                        setMouseDownX(e.clientX);
-                        setMouseDownY(e.clientY);
-                    } else {
-                        void appWindow.close();
-                    }
-                }}
-                onMouseMove={(e) => {
-                    if (isDown) {
-                        setIsMoved(true);
-                        setMouseMoveX(e.clientX);
-                        setMouseMoveY(e.clientY);
-                    }
-                }}
-                onMouseUp={async (e) => {
-                    appWindow.hide();
-                    setIsDown(false);
-                    setIsMoved(false);
-                    const imgWidth = imgRef.current.naturalWidth;
-                    const dpi = imgWidth / screen.width;
-                    const left = Math.floor(Math.min(mouseDownX, e.clientX) * dpi);
-                    const top = Math.floor(Math.min(mouseDownY, e.clientY) * dpi);
-                    const right = Math.floor(Math.max(mouseDownX, e.clientX) * dpi);
-                    const bottom = Math.floor(Math.max(mouseDownY, e.clientY) * dpi);
-                    const width = right - left;
-                    const height = bottom - top;
-                    if (width <= 0 || height <= 0) {
-                        warn('Screenshot area is too small');
-                        await appWindow.close();
-                    } else {
-                        await invoke('cut_image', { left, top, width, height });
-                        await emit('success');
-                        await appWindow.close();
-                    }
-                }}
-            />
-        </>
+        <div
+            className='fixed inset-0 select-none'
+            onContextMenu={(e) => {
+                e.preventDefault();
+                appWindow.close();
+            }}
+        >
+            {imgurl && (
+                <img
+                    ref={image}
+                    src={imgurl}
+                    alt=''
+                    draggable={false}
+                    className='fixed inset-0 w-full h-full'
+                    onLoad={async () => {
+                        await appWindow.show();
+                        await appWindow.setFocus();
+                        await appWindow.setResizable(false);
+                    }}
+                    onError={() => {
+                        setError(t('screenshot.capture_failed'));
+                        appWindow.show();
+                    }}
+                />
+            )}
+            <div className='fixed inset-0 bg-black/55' />
+            {!capture && (
+                <div
+                    className='fixed inset-0 cursor-crosshair'
+                    style={{ touchAction: 'none' }}
+                    onPointerDown={(e) => {
+                        if (e.button !== 0) return;
+                        if (working.current || !image.current?.naturalWidth) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        start.current = { x: e.clientX, y: e.clientY };
+                        setSelection({ x: e.clientX, y: e.clientY, width: 0, height: 0 });
+                    }}
+                    onPointerMove={(e) => {
+                        if (start.current) setSelection(region({ x: e.clientX, y: e.clientY }).rect);
+                    }}
+                    onPointerUp={finish}
+                    onPointerCancel={() => {
+                        start.current = null;
+                        setSelection(null);
+                    }}
+                />
+            )}
+            {selection && !capture && (
+                <div
+                    className='fixed pointer-events-none border-2 border-rose-400'
+                    style={{
+                        left: selection.x,
+                        top: selection.y,
+                        width: selection.width,
+                        height: selection.height,
+                        backgroundImage: `url("${imgurl}")`,
+                        backgroundSize: `${window.innerWidth}px ${window.innerHeight}px`,
+                        backgroundPosition: `-${selection.x}px -${selection.y}px`,
+                    }}
+                />
+            )}
+            {capture && (
+                <div
+                    className='screenshot-overlay-shell'
+                    style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }}
+                >
+                    <TranslationSurface
+                        capture={capture}
+                        floating
+                        onRecapture={loadScreenshot}
+                        onClose={() => appWindow.close()}
+                    />
+                </div>
+            )}
+            {(!selection || error) && (
+                <div
+                    className='screenshot-hint'
+                    role={error ? 'alert' : 'status'}
+                >
+                    {error || t('screenshot.select_hint')}
+                    {error && (
+                        <button
+                            className='ml-3 underline pointer-events-auto'
+                            onClick={loadScreenshot}
+                        >
+                            {t('screenshot.retry')}
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }

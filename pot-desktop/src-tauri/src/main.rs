@@ -8,7 +8,9 @@ mod config;
 mod error;
 mod hotkey;
 mod lang_detect;
+mod live_audio;
 mod screenshot;
+mod selection_translate;
 mod server;
 mod system_ocr;
 mod tray;
@@ -23,7 +25,7 @@ use hotkey::*;
 use lang_detect::*;
 use log::info;
 use once_cell::sync::OnceCell;
-use screenshot::screenshot;
+use screenshot::{screenshot, screenshot_translate_mode};
 use server::*;
 use std::sync::Mutex;
 use system_ocr::*;
@@ -125,15 +127,27 @@ fn main() {
                 clipboard_monitor.to_string(),
             )));
             start_clipboard_monitor(app.handle());
+            selection_translate::start();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             reload_store,
+            selection_translate::selection_payload,
+            selection_translate::selection_open,
+            selection_translate::selection_dismiss,
+            selection_translate::selection_status,
+            selection_translate::selection_set_enabled,
+            live_audio::live_audio_start,
+            live_audio::live_audio_stop,
+            live_audio::live_transcribe,
             get_text,
             cut_image,
             get_base64,
             copy_img,
             system_ocr,
+            system_ocr_layout,
+            screenshot_translate_mode,
+            window::start_screenshot_translate,
             set_proxy,
             unset_proxy,
             run_binary,
@@ -150,6 +164,9 @@ fn main() {
             aliyun
         ])
         .on_system_tray_event(tray_event_handler)
+        .on_window_event(|event| {
+            if matches!(event.event(), tauri::WindowEvent::Destroyed) { live_audio::stop_for_window(event.window().label()); }
+        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         // 窗口关闭不退出

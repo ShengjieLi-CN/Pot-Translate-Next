@@ -1,0 +1,158 @@
+.screenshot-translation {
+    width: 100%;
+    color: #e9edf4;
+}
+.screenshot-result {
+    position: relative;
+    width: 100%;
+    background: white;
+    outline: 2px solid #fb7185;
+}
+.screenshot-original {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+}
+.screenshot-paper {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    color: #172033;
+    overflow: hidden;
+    user-select: text;
+}
+.screenshot-block {
+    position: absolute;
+    margin: 0;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: auto;
+    scrollbar-width: thin;
+    font-family: Arial, 'Microsoft YaHei', sans-serif;
+}
+.screenshot-block:focus-visible {
+    outline: 2px solid #2563eb;
+}
+.screenshot-block.heading,
+.screenshot-paper .heading {
+    font-weight: 700;
+}
+.screenshot-paper.text-only {
+    overflow: auto;
+    padding: 12px;
+    font-size: 15px;
+    white-space: pre-wrap;
+}
+.screenshot-paper.text-only > div {
+    margin-bottom: 1em;
+}
+.screenshot-busy {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #111827aa;
+    color: white;
+}
+.screenshot-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    background: #202531;
+    padding: 7px;
+    margin-top: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px #0004;
+    font-size: 12px;
+}
+.screenshot-toolbar select {
+    max-width: 145px;
+    min-width: 65px;
+    background: #343c4d;
+    color: white;
+    padding: 5px;
+    border-radius: 4px;
+}
+.screenshot-toolbar button {
+    background: #374151;
+    color: white;
+    border-radius: 4px;
+    padding: 5px 9px;
+}
+.screenshot-toolbar button:hover {
+    background: #52617a;
+}
+.screenshot-toolbar button:focus-visible,
+.screenshot-toolbar select:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+.screenshot-toolbar button[aria-pressed='true'] {
+    background: #2563eb;
+}
+.screenshot-toolbar button:disabled {
+    opacity: 0.4;
+}
+.screenshot-status {
+    font-size: 12px;
+    margin-top: 6px;
+    background: #202531ed;
+    padding: 5px 9px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 110px;
+    overflow: auto;
+}
+.screenshot-status [role='alert'] {
+    color: #fda4af;
+}
+.screenshot-overlay-shell {
+    position: fixed;
+    z-index: 5;
+    overflow: visible;
+}
+.screenshot-overlay-shell .screenshot-translation {
+    height: 100%;
+}
+.screenshot-overlay-shell .screenshot-result {
+    height: 100%;
+    aspect-ratio: auto !important;
+}
+.screenshot-overlay-shell .screenshot-controls {
+    position: fixed;
+    z-index: 6;
+    width: max-content;
+    max-width: min(900px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+}
+.screenshot-overlay-shell .screenshot-controls .screenshot-toolbar {
+    margin-top: 0;
+}
+.screenshot-hint {
+    position: fixed;
+    left: 50%;
+    top: 20px;
+    transform: translateX(-50%);
+    border-radius: 9px;
+    padding: 12px 20px;
+    color: white;
+    background: #111827e6;
+    pointer-events: none;
+    z-index: 8;
+}
+.screenshot-image-window {
+    height: calc(100vh - 36px);
+    overflow: auto;
+    background: #151b26;
+    padding: 22px;
+}
+.screenshot-image-window .screenshot-translation {
+    max-width: 1400px;
+    margin: auto;
+}

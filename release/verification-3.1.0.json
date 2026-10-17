@@ -1,0 +1,32 @@
+[
+  {
+    "file": "Pot Translate Next_3.1.0_x64_en-US.msi",
+    "version": "3.1.0",
+    "product": "Pot Translate Next",
+    "language": "1033",
+    "template": "x64;0",
+    "bytes": 37273600,
+    "sha256": "694B7AE2DBF8ADAE377D6377EF910E2D7DE810126B0C9E1DC64909ADB0DE6911",
+    "embeddedFiles": [
+      {
+        "bytes": 50620928,
+        "name": "-ddaenqh.exe|Pot Translate Next.exe"
+      }
+    ]
+  },
+  {
+    "file": "Pot Translate Next_3.1.0_x64_zh-CN.msi",
+    "version": "3.1.0",
+    "product": "Pot Translate Next",
+    "language": "2052",
+    "template": "x64;0",
+    "bytes": 37269504,
+    "sha256": "F5B8B560353CB3E211FBAC993F953A9458D2E1606AA8D98D5919D259329DBF99",
+    "embeddedFiles": [
+      {
+        "bytes": 50620928,
+        "name": "-ddaenqh.exe|Pot Translate Next.exe"
+      }
+    ]
+  }
+]

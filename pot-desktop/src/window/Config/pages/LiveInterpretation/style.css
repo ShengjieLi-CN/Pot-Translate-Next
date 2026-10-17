@@ -1,0 +1,284 @@
+.live-page {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 4px 4px 24px;
+}
+.live-page-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+.live-page-heading h2 {
+    font-size: 23px;
+    font-weight: 650;
+}
+.live-page-heading p,
+.live-help {
+    color: hsl(var(--nextui-default-500));
+    font-size: 12px;
+    line-height: 1.65;
+}
+.live-wave-player {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-radius: 9px;
+    background: hsl(var(--nextui-default-100) / 0.65);
+}
+.live-wave-player strong {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: #7864e8;
+}
+.live-record-indicator {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #a8a5b7;
+    flex-shrink: 0;
+}
+.live-record-indicator.running {
+    background: #f05274;
+    box-shadow: 0 0 0 4px #f0527420;
+}
+.live-wave {
+    flex: 1;
+    height: 30px;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    overflow: hidden;
+}
+.live-wave span {
+    display: block;
+    width: 3px;
+    min-width: 2px;
+    flex: 1;
+    border-radius: 2px;
+    background: #b0a7df;
+    transition: height 0.1s;
+}
+.live-status {
+    font-size: 12px;
+    white-space: nowrap;
+    color: hsl(var(--nextui-default-500));
+}
+.live-action-bar,
+.live-exports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.live-queue {
+    font-size: 12px;
+    color: hsl(var(--nextui-default-500));
+    margin-left: auto;
+}
+.live-language-bar {
+    display: grid;
+    grid-template-columns: 1fr 30px 1fr;
+    gap: 8px;
+    align-items: end;
+    border-radius: 9px;
+    background: hsl(var(--nextui-default-100));
+    padding: 10px;
+}
+.live-language-bar > button {
+    padding: 8px 0;
+}
+.live-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    min-width: 0;
+}
+.live-field input,
+.live-field select,
+.live-field textarea {
+    background: hsl(var(--nextui-default-100));
+    color: hsl(var(--nextui-foreground));
+    border-radius: 7px;
+    padding: 9px 10px;
+    border: 1px solid hsl(var(--nextui-default-200));
+    min-width: 0;
+    font-size: 13px;
+}
+.live-field input:disabled,
+.live-field select:disabled,
+.live-field textarea:disabled {
+    opacity: 0.55;
+}
+.live-field input:focus-visible,
+.live-field select:focus-visible,
+.live-field textarea:focus-visible {
+    outline: 2px solid #9483ed;
+}
+.live-field textarea {
+    min-height: 80px;
+    font-family: monospace;
+    resize: vertical;
+}
+.live-source-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.live-settings {
+    gap: 14px;
+}
+.live-settings h3,
+.live-transcript-heading h3 {
+    font-weight: 650;
+    font-size: 15px;
+}
+.live-check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+}
+.live-check input {
+    accent-color: #7965e8;
+}
+.live-messages {
+    border-radius: 9px;
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.7;
+    background: hsl(var(--nextui-default-100));
+    overflow-wrap: anywhere;
+}
+.live-messages [role='alert'] {
+    color: #e25365;
+}
+.live-messages button {
+    color: #7864e8;
+    text-decoration: underline;
+    margin-top: 5px;
+}
+.live-transcript-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.live-transcript {
+    background: hsl(var(--nextui-content1));
+    border-radius: 12px;
+    padding: 0 16px;
+    min-height: 210px;
+    user-select: text;
+}
+.live-utterance {
+    display: grid;
+    grid-template-columns: 82px 1fr;
+    gap: 14px;
+    padding: 16px 0;
+    border-bottom: 1px solid hsl(var(--nextui-default-100));
+}
+.live-utterance:last-of-type {
+    border-bottom: 0;
+}
+.live-utterance.playing {
+    background: #9c8bef12;
+}
+.live-utterance-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.live-utterance-meta button {
+    color: #8774e9;
+    text-align: left;
+}
+.live-utterance-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+.live-translation {
+    margin-top: 5px;
+    color: hsl(var(--nextui-default-500));
+}
+.live-speaker-color {
+    color: #6c67ba;
+}
+.live-speaker-color.color-2 {
+    color: #278f8c;
+}
+.live-speaker-color.color-3 {
+    color: #b27430;
+}
+.live-speaker-color.color-4 {
+    color: #b25f8f;
+}
+.live-speaker-color.color-5 {
+    color: #4a85b8;
+}
+.live-speakers {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 11px;
+}
+.live-speakers label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.live-speakers input {
+    width: 85px;
+    padding: 4px 6px;
+    background: hsl(var(--nextui-default-100));
+    border-radius: 5px;
+}
+.live-empty {
+    text-align: center;
+    padding: 40px 8px;
+    color: hsl(var(--nextui-default-500));
+    font-size: 13px;
+}
+.live-empty > span {
+    display: block;
+    font-size: 28px;
+    color: #a99ce7;
+    margin-bottom: 8px;
+}
+.live-empty small {
+    display: block;
+    margin-top: 8px;
+    font-size: 11px;
+}
+.live-page audio {
+    width: 100%;
+    height: 36px;
+}
+@media (max-width: 900px) {
+    .live-page {
+        gap: 10px;
+    }
+    .live-page-heading h2 {
+        font-size: 20px;
+    }
+    .live-utterance {
+        grid-template-columns: 66px 1fr;
+        gap: 8px;
+    }
+    .live-wave {
+        gap: 2px;
+    }
+    .live-status {
+        max-width: 70px;
+        overflow: hidden;
+    }
+}

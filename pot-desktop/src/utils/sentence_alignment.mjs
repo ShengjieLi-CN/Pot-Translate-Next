@@ -27,18 +27,31 @@ export function bilingualLanguages(text, direction) {
 }
 
 export function joinTranslations(parts) {
-    return parts.map((part) => part.translation).join('\n');
+    return parts.map((part) => `${part.separatorBefore ?? ''}${part.translation}${part.separatorAfter ?? ''}`).join('');
 }
 
 // Sequential requests avoid a burst of API calls. Check cancellation before and
 // after every await, including streaming updates from the current sentence.
 export async function translateSentences(text, translate, { isCurrent, onProgress, textOnlyError }) {
-    const parts = splitSentences(text).map((part) => ({ ...part, translation: '' }));
+    const sentences = splitSentences(text);
+    const parts = sentences.map((part, index) => {
+        const gap = text.slice(index === 0 ? 0 : sentences[index - 1].end, part.start);
+        return {
+            ...part,
+            // Keep hard breaks and blank lines from the source, rather than
+            // turning each sentence into its own paragraph.
+            separatorBefore: index === 0 ? gap : gap || ' ',
+            separatorAfter: index === sentences.length - 1 ? text.slice(part.end) : '',
+            translation: '',
+        };
+    });
     for (const [index, part] of parts.entries()) {
         if (!isCurrent()) return '';
         const publish = (value) => {
             if (!isCurrent() || typeof value !== 'string') return;
-            parts[index] = { ...part, translation: value };
+            // A source sentence contains no hard breaks; provider-added wraps
+            // must not introduce extra paragraphs within that sentence.
+            parts[index] = { ...part, translation: value.replace(/\s*[\r\n]+\s*/g, ' ') };
             onProgress(parts.slice());
         };
         const result = await translate(part.text, publish);

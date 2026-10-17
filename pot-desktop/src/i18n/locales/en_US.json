@@ -1,5 +1,22 @@
 {
     "translation": {
+        "selection_nav": "Selection translation",
+        "live_nav": "Live interpretation",
+        "screenshot": {
+            "title": "Screenshot translation", "description": "Select a screen region to overlay the translation on the image, preserving paragraphs and columns. Switch back to the original to compare.",
+            "start": "Translate a screenshot", "configure_hotkey": "Set screenshot shortcut", "configure_services": "Configure translation and OCR",
+            "rules": "Restore PDF line-break hyphenation, omit clipped edge fragments, use terminology appropriate to the document, and preserve headings, paragraphs, formulas, code and abbreviations.",
+            "service_hint": "Configure an OCR service and a text translator first. Models supporting custom prompts can apply context, terminology and correction rules; standard translation quality depends on the provider. The image is sent to your selected OCR service and recognized text to your selected translator.",
+            "select_hint": "Drag to select a region · Esc or right-click to exit",
+            "original": "Original screenshot", "source_language": "Source language", "target_language": "Target language", "translation_service": "Translation service", "ocr_service": "OCR service",
+            "show_original": "Show original", "show_translation": "Show translation", "copy": "Copy translation", "copied": "Translation copied", "retry": "Retry", "recapture": "New screenshot", "close": "Close",
+            "loading": "Loading services…", "recognizing": "Recognizing text…", "translating": "Translating…", "done": "Translation complete", "error": "Translation failed", "empty": "No services configured",
+            "no_service": "Enable an OCR service and a text translation service in the main window's service settings, then retry. Dictionary services cannot translate screenshots.",
+            "no_text": "No complete text found. Select a new region without cutting through text.", "capture_failed": "Unable to load the screenshot. Please capture again.",
+            "unsupported_ocr": "This OCR service does not support the selected language. Change the OCR service or source language.", "unsupported_language": "This translation service does not support the selected language pair. Change the service or languages.",
+            "standard_hint": "This provider uses standard text translation. Context, domain terminology and semantic correction rules require a model service supporting custom prompts.",
+            "domains": { "general": "General", "biomedicine": "Biomedicine", "computer_science": "Computer science", "physics": "Physics", "literature": "Literature" }
+        },
         "bilingual": {
             "mode": "Translation mode",
             "title": "English ↔ Chinese",

@@ -21,7 +21,13 @@ pub fn reload_store() {
 }
 
 #[tauri::command]
-pub fn cut_image(left: u32, top: u32, width: u32, height: u32, app_handle: tauri::AppHandle) {
+pub fn cut_image(
+    left: u32,
+    top: u32,
+    width: u32,
+    height: u32,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
     use dirs::cache_dir;
     use image::GenericImage;
     info!("Cut image: {}x{}+{}+{}", width, height, left, top);
@@ -29,22 +35,32 @@ pub fn cut_image(left: u32, top: u32, width: u32, height: u32, app_handle: tauri
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot.png");
     if !app_cache_dir_path.exists() {
-        return;
+        return Err("Screenshot not found".to_string());
     }
     let mut img = match image::open(&app_cache_dir_path) {
         Ok(v) => v,
         Err(e) => {
             error!("{:?}", e.to_string());
-            return;
+            return Err(e.to_string());
         }
     };
+    if width == 0
+        || height == 0
+        || left >= img.width()
+        || top >= img.height()
+        || width > img.width() - left
+        || height > img.height() - top
+    {
+        return Err("Screenshot area is outside the image".to_string());
+    }
     let img2 = img.sub_image(left, top, width, height);
     app_cache_dir_path.pop();
     app_cache_dir_path.push("pot_screenshot_cut.png");
     match img2.to_image().save(&app_cache_dir_path) {
-        Ok(_) => {}
+        Ok(_) => Ok(()),
         Err(e) => {
             error!("{:?}", e.to_string());
+            Err(e.to_string())
         }
     }
 }

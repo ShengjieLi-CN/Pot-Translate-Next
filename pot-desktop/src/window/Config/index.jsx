@@ -62,7 +62,17 @@ export default function Config() {
                 />
                 <div className='h-[35px] flex justify-between'>
                     <div className='flex'>
-                        <h2 className='m-auto ml-[10px]'>{t(`config.${location.pathname.slice(1)}.title`)}</h2>
+                        <h2 className='m-auto ml-[10px]'>
+                            {t(
+                                location.pathname === '/live'
+                                    ? 'live_nav'
+                                    : location.pathname === '/selection'
+                                      ? 'selection_nav'
+                                      : location.pathname === '/screenshot'
+                                        ? 'screenshot.title'
+                                        : `config.${location.pathname.slice(1)}.title`
+                            )}
+                        </h2>
                     </div>
 
                     <div className='flex'>{osType !== 'Darwin' && <WindowControl />}</div>

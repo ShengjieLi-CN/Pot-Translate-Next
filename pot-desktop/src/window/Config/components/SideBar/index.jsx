@@ -5,6 +5,8 @@ import { AiFillAppstore } from 'react-icons/ai';
 import { useTranslation } from 'react-i18next';
 import { PiTextboxFill, PiKeyboardFill } from 'react-icons/pi';
 import { MdKeyboardAlt } from 'react-icons/md';
+import { MdScreenshotMonitor } from 'react-icons/md';
+import { MdRecordVoiceOver } from 'react-icons/md';
 import { MdExtension } from 'react-icons/md';
 import { AiFillCloud } from 'react-icons/ai';
 import { FaHistory } from 'react-icons/fa';
@@ -25,12 +27,42 @@ export default function SideBar() {
             <Button
                 fullWidth
                 size='lg'
+                variant={setStyle('/screenshot')}
+                className='mb-[5px]'
+                onPress={() => navigate('/screenshot')}
+                startContent={<MdScreenshotMonitor className='text-[24px]' />}
+            >
+                <div className='w-full'>{t('screenshot.title')}</div>
+            </Button>
+            <Button
+                fullWidth
+                size='lg'
                 variant={setStyle('/input')}
                 className='mb-[5px]'
                 onPress={() => navigate('/input')}
                 startContent={<PiKeyboardFill className='text-[24px]' />}
             >
                 <div className='w-full'>{t('config.input.label')}</div>
+            </Button>
+            <Button
+                fullWidth
+                size='lg'
+                variant={setStyle('/selection')}
+                className='mb-[5px]'
+                onPress={() => navigate('/selection')}
+                startContent={<PiTextboxFill className='text-[24px]' />}
+            >
+                <div className='w-full'>{t('selection_nav')}</div>
+            </Button>
+            <Button
+                fullWidth
+                size='lg'
+                variant={setStyle('/live')}
+                className='mb-[5px]'
+                onPress={() => navigate('/live')}
+                startContent={<MdRecordVoiceOver className='text-[24px]' />}
+            >
+                <div className='w-full'>{t('live_nav')}</div>
             </Button>
             <Button
                 fullWidth

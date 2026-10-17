@@ -109,3 +109,9 @@ export async function recognize(_, lang) {
 
 export * from './Config';
 export * from './info';
+
+// The screenshot surface needs word geometry; regular OCR keeps its string API.
+export async function recognizeLayout(base64, lang) {
+    if (osType === 'Windows_NT') return invoke('system_ocr_layout', { lang });
+    return { text: await recognize(base64, lang) };
+}

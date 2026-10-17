@@ -3,6 +3,17 @@ use dirs::cache_dir;
 #[tauri::command(async)]
 #[cfg(target_os = "windows")]
 pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, String> {
+    windows_ocr_result(app_handle, lang)?
+        .Text()
+        .map(|text| text.to_string_lossy())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn windows_ocr_result(
+    app_handle: tauri::AppHandle,
+    lang: &str,
+) -> Result<windows::Media::Ocr::OcrResult, String> {
     use windows::core::HSTRING;
     use windows::Globalization::Language;
     use windows::Graphics::Imaging::BitmapDecoder;
@@ -15,20 +26,29 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
 
     let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
 
+    let fail = |e: windows::core::Error| e.to_string();
     let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path))
-        .unwrap()
+        .map_err(fail)?
         .get()
-        .unwrap();
+        .map_err(fail)?;
 
     let bitmap = BitmapDecoder::CreateWithIdAsync(
-        BitmapDecoder::PngDecoderId().unwrap(),
-        &file.OpenAsync(FileAccessMode::Read).unwrap().get().unwrap(),
+        BitmapDecoder::PngDecoderId().map_err(fail)?,
+        &file
+            .OpenAsync(FileAccessMode::Read)
+            .map_err(fail)?
+            .get()
+            .map_err(fail)?,
     )
-    .unwrap()
+    .map_err(fail)?
     .get()
-    .unwrap();
+    .map_err(fail)?;
 
-    let bitmap = bitmap.GetSoftwareBitmapAsync().unwrap().get().unwrap();
+    let bitmap = bitmap
+        .GetSoftwareBitmapAsync()
+        .map_err(fail)?
+        .get()
+        .map_err(fail)?;
 
     let engine = match lang {
         "auto" => OcrEngine::TryCreateFromUserProfileLanguages(),
@@ -42,14 +62,7 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
     };
 
     match engine {
-        Ok(v) => Ok(v
-            .RecognizeAsync(&bitmap)
-            .unwrap()
-            .get()
-            .unwrap()
-            .Text()
-            .unwrap()
-            .to_string_lossy()),
+        Ok(v) => v.RecognizeAsync(&bitmap).map_err(fail)?.get().map_err(fail),
         Err(e) => {
             if e.to_string().contains("0x00000000") {
                 Err("Language package not installed!\n\nSee: https://learn.microsoft.com/zh-cn/windows/powertoys/text-extractor#supported-languages".to_string())
@@ -58,6 +71,39 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
             }
         }
     }
+}
+
+#[tauri::command(async)]
+#[cfg(target_os = "windows")]
+pub fn system_ocr_layout(
+    app_handle: tauri::AppHandle,
+    lang: &str,
+) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let result = windows_ocr_result(app_handle, lang)?;
+    let fail = |e: windows::core::Error| e.to_string();
+    let mut lines = Vec::new();
+    for line in result.Lines().map_err(fail)? {
+        let mut words = Vec::new();
+        for word in line.Words().map_err(fail)? {
+            let rect = word.BoundingRect().map_err(fail)?;
+            words.push(json!({
+                "text": word.Text().map_err(fail)?.to_string_lossy(),
+                "box": { "x": rect.X, "y": rect.Y, "width": rect.Width, "height": rect.Height }
+            }));
+        }
+        lines.push(json!({ "text": line.Text().map_err(fail)?.to_string_lossy(), "words": words }));
+    }
+    Ok(json!({ "text": result.Text().map_err(fail)?.to_string_lossy(), "lines": lines }))
+}
+
+#[tauri::command(async)]
+#[cfg(not(target_os = "windows"))]
+pub fn system_ocr_layout(
+    app_handle: tauri::AppHandle,
+    lang: &str,
+) -> Result<serde_json::Value, String> {
+    system_ocr(app_handle, lang).map(|text| serde_json::json!({ "text": text }))
 }
 
 #[tauri::command(async)]

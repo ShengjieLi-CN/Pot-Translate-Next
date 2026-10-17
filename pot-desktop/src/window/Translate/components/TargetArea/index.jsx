@@ -204,7 +204,7 @@ export default function TargetArea(props) {
         const runTranslation = (func, text, from, to, options) => {
             if (!sentenceAlignment) return func(text, from, to, options);
             return translateSentences(
-                text,
+                sourceText,
                 (sentence, publish) =>
                     func(sentence, from, to, {
                         ...options,
@@ -255,7 +255,7 @@ export default function TargetArea(props) {
                     (v) => {
                         info(`[${currentTranslateServiceInstanceKey}]resolve:` + v);
                         if (requestId.current !== id) return;
-                        setResult(typeof v === 'string' ? v.trim() : v);
+                        setResult(typeof v === 'string' && !sentenceAlignment ? v.trim() : v);
                         setIsLoading(false);
                         if (v !== '') {
                             setHideOnce(false);
@@ -334,7 +334,7 @@ export default function TargetArea(props) {
                     (v) => {
                         info(`[${currentTranslateServiceInstanceKey}]resolve:` + v);
                         if (requestId.current !== id) return;
-                        setResult(typeof v === 'string' ? v.trim() : v);
+                        setResult(typeof v === 'string' && !sentenceAlignment ? v.trim() : v);
                         setIsLoading(false);
                         if (v !== '') {
                             setHideOnce(false);
@@ -586,7 +586,7 @@ export default function TargetArea(props) {
                             >
                                 {alignedSentences.map((sentence, sentenceIndex) => (
                                     <React.Fragment key={sentence.start}>
-                                        {sentenceIndex > 0 && '\n'}
+                                        {sentence.separatorBefore}
                                         <span
                                             tabIndex={sentence.translation && canHighlight ? 0 : undefined}
                                             className={`sentence-target ${activeSentence?.service === name && activeSentence.index === sentenceIndex ? 'sentence-highlight' : ''}`}
@@ -620,6 +620,7 @@ export default function TargetArea(props) {
                                         >
                                             {sentence.translation}
                                         </span>
+                                        {sentence.separatorAfter}
                                     </React.Fragment>
                                 ))}
                             </div>
