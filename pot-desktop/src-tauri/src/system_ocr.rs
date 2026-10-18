@@ -1,5 +1,9 @@
 use dirs::cache_dir;
 
+#[cfg(target_os = "windows")]
+#[path = "screenshot_ocr.rs"]
+mod screenshot_layout;
+
 #[tauri::command(async)]
 #[cfg(target_os = "windows")]
 pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, String> {
@@ -78,23 +82,19 @@ fn windows_ocr_result(
 pub fn system_ocr_layout(
     app_handle: tauri::AppHandle,
     lang: &str,
+    base64: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    use serde_json::json;
-    let result = windows_ocr_result(app_handle, lang)?;
-    let fail = |e: windows::core::Error| e.to_string();
-    let mut lines = Vec::new();
-    for line in result.Lines().map_err(fail)? {
-        let mut words = Vec::new();
-        for word in line.Words().map_err(fail)? {
-            let rect = word.BoundingRect().map_err(fail)?;
-            words.push(json!({
-                "text": word.Text().map_err(fail)?.to_string_lossy(),
-                "box": { "x": rect.X, "y": rect.Y, "width": rect.Width, "height": rect.Height }
-            }));
+    use base64::{engine::general_purpose, Engine as _};
+    let bytes = match base64 {
+        Some(data) => general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?,
+        None => {
+            let path = cache_dir().ok_or("无法读取截图缓存目录")?
+                .join(&app_handle.config().tauri.bundle.identifier)
+                .join("pot_screenshot_cut.png");
+            std::fs::read(path).map_err(|e| e.to_string())?
         }
-        lines.push(json!({ "text": line.Text().map_err(fail)?.to_string_lossy(), "words": words }));
-    }
-    Ok(json!({ "text": result.Text().map_err(fail)?.to_string_lossy(), "lines": lines }))
+    };
+    screenshot_layout::recognize(&bytes, lang)
 }
 
 #[tauri::command(async)]

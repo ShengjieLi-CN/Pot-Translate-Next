@@ -36,6 +36,12 @@ fn http_handle(request: Request) {
     match request.url() {
         "/" => handle_translate(request),
         "/config" => handle_config(request),
+        // Read-only diagnostics contain counters/state, never selected text.
+        "/selection_status" => {
+            let _ = request.respond(Response::from_string(
+                crate::selection_translate::selection_status().to_string(),
+            ));
+        }
         "/translate" => handle_translate(request),
         "/selection_translate" => handle_selection_translate(request),
         "/input_translate" => handle_input_translate(request),

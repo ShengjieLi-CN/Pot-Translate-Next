@@ -47,6 +47,8 @@ async function requestTranscription(audio, config, source, references = []) {
     validateStt(config);
     return invoke('live_transcribe', {
         config: {
+            provider: config.provider || 'custom',
+            diarization: Boolean(config.diarization),
             endpoint: config.endpoint.trim(),
             apiKey: config.apiKey,
             model: config.model.trim(),

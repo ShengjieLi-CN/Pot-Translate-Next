@@ -14,6 +14,7 @@ import Recognize from './window/Recognize';
 import Updater from './window/Updater';
 import { store } from './utils/store';
 import Config from './window/Config';
+import WindowMaterial from './components/WindowMaterial';
 import { useConfig } from './hooks';
 import './style.css';
 import './i18n';
@@ -55,7 +56,7 @@ export default function App() {
                 if (e.key.startsWith('F') && e.key.length > 1) {
                     e.preventDefault();
                 }
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && appWindow.label !== 'selection_translate') {
                     await appWindow.close();
                 }
             });
@@ -68,7 +69,7 @@ export default function App() {
                 if (e.key.startsWith('F') && e.key.length > 1) {
                     e.preventDefault();
                 }
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && appWindow.label !== 'selection_translate') {
                     await appWindow.close();
                 }
             });
@@ -116,5 +117,10 @@ export default function App() {
         }
     }, [appFont, appFallbackFont, appFontSize]);
 
-    return <BrowserRouter>{windowMap[appWindow.label]}</BrowserRouter>;
+    return (
+        <>
+            <WindowMaterial />
+            <BrowserRouter>{windowMap[appWindow.label]}</BrowserRouter>
+        </>
+    );
 }

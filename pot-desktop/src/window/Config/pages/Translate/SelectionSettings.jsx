@@ -64,13 +64,13 @@ export default function SelectionSettings() {
     return (
         <Card
             shadow='none'
-            className='bg-content1 rounded-[10px]'
+            className='bg-content1 rounded-[10px] mb-[10px]'
         >
-            <CardBody className='gap-5 p-6'>
+            <CardBody className='gap-3 p-4'>
                 <h2 className='text-xl font-semibold'>{L('划词翻译', 'Selection translation')}</h2>
                 <p className='text-default-500'>
                     {L(
-                        '在 PDF、浏览器或文档中选中文字，点击附近的“译”按钮。浮窗仅显示译文，保留段落与可读取的字体样式，合并 PDF 断行，不逐句另起一行。',
+                        '选中文字后点击附近的“译”按钮；浮窗仅显示译文，保留原有段落。',
                         'Select text in a PDF, browser or document, then click the nearby Translate badge. Only the translation is shown, preserving paragraphs and available font styles while merging PDF line breaks.'
                     )}
                 </p>
@@ -187,12 +187,6 @@ export default function SelectionSettings() {
                         {L('配置翻译服务', 'Configure translation services')}
                     </Button>
                 </div>
-                <p className='text-sm text-default-500'>
-                    {L(
-                        '划词后先出现“译”按钮，点击后才读取并发送选中文字；无法直接读取时会尝试兼容复制取词。若读取失败，浮窗会提示重新划词或使用截图翻译。仅有图片、无法选中文字的 PDF 请使用截图翻译。',
-                        'Selecting offers a Translate badge. Text is read and sent only after clicking it. When direct selection access is unavailable, a compatibility copy is attempted. Reading failures show a message. Use screenshot translation for scanned PDFs.'
-                    )}
-                </p>
                 {error && (
                     <p
                         role='alert'

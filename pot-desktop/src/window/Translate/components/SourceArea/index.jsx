@@ -45,6 +45,7 @@ export default function SourceArea(props) {
     const sourceRevision = useRef(0);
     const submitTextRef = useRef(null);
     const isComposing = useRef(false);
+    const [composing, setComposing] = useState(false);
     const sourceBodyRef = useRef(null);
     const highlightRef = useRef(null);
     const sourceSentences = useMemo(() => splitSentences(sourceText), [sourceText]);
@@ -206,6 +207,20 @@ export default function SourceArea(props) {
     };
     submitTextRef.current = submitText;
 
+    // The main input page always translates its latest draft, including restored
+    // drafts and programmatic edits. Popup translation keeps its existing setting.
+    useEffect(() => {
+        if (!embedded) return;
+        clearTimeout(sourceTextChangeTimer.current);
+        if (!sourceText.trim()) {
+            syncSourceText();
+            return;
+        }
+        if (!canTranslate || composing) return;
+        sourceTextChangeTimer.current = setTimeout(() => submitTextRef.current(), 600);
+        return () => clearTimeout(sourceTextChangeTimer.current);
+    }, [sourceText, embedded, canTranslate, composing]);
+
     const keyDown = (event) => {
         if (isComposing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -339,7 +354,7 @@ export default function SourceArea(props) {
         setActiveSentence(null);
         setDetectLanguage('');
         await setSourceText(text);
-        if (dynamicTranslate && canTranslate && !isComposing.current) {
+        if (!embedded && dynamicTranslate && canTranslate && !isComposing.current) {
             // Read the latest draft when the debounce fires.
             sourceTextChangeTimer.current = setTimeout(() => submitTextRef.current(), 1000);
         }
@@ -497,10 +512,13 @@ export default function SourceArea(props) {
                             onKeyDown={keyDown}
                             onCompositionStart={() => {
                                 isComposing.current = true;
+                                setComposing(true);
+                                sourceRevision.current++;
                                 clearTimeout(sourceTextChangeTimer.current);
                             }}
                             onCompositionEnd={(event) => {
                                 isComposing.current = false;
+                                setComposing(false);
                                 changeSourceText(event.currentTarget.value);
                             }}
                             onFocus={() => setActiveSentence(null)}

@@ -2,6 +2,7 @@ import detect from '../../../utils/lang_detect';
 import { osType } from '../../../utils/env';
 import { invoke } from '@tauri-apps/api';
 import { Language } from './info';
+import { needsEnglishScreenshotFallback, recognizeEnglishScreenshot } from '../../../utils/screenshot_ocr.mjs';
 
 export async function recognize(_, lang) {
     const linuxLangMap = {
@@ -112,6 +113,27 @@ export * from './info';
 
 // The screenshot surface needs word geometry; regular OCR keeps its string API.
 export async function recognizeLayout(base64, lang) {
-    if (osType === 'Windows_NT') return invoke('system_ocr_layout', { lang });
+    // Pass this capture's immutable pixels, rather than rereading a shared crop
+    // which another screenshot/OCR window may already have overwritten.
+    if (osType === 'Windows_NT') {
+        const windowsLang =
+            { zh_cn: 'zh-CN', zh_tw: 'zh-TW', yue: 'zh-HK', en: 'en-US', pt_br: 'pt-BR' }[lang] ||
+            lang.replace('_', '-');
+        let result;
+        try {
+            result = await invoke('system_ocr_layout', { lang: windowsLang, base64 });
+        } catch (error) {
+            if (!['auto', 'en', 'en-US'].includes(lang)) throw error;
+            return recognizeEnglishScreenshot(base64);
+        }
+        if (needsEnglishScreenshotFallback(result) || (result.englishAvailable === false && !result.lines?.length)) {
+            try {
+                return await recognizeEnglishScreenshot(base64, result);
+            } catch {
+                return result;
+            } // Keep usable native results if the worker fails.
+        }
+        return result;
+    }
     return { text: await recognize(base64, lang) };
 }

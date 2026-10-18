@@ -12,6 +12,11 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static CURRENT: Lazy<Mutex<Option<Selection>>> = Lazy::new(|| Mutex::new(None));
 static LAST_ERROR: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
 static LISTENING: AtomicBool = AtomicBool::new(false);
+static POLLING: AtomicBool = AtomicBool::new(false);
+static MOUSE_EVENTS: AtomicU64 = AtomicU64::new(0);
+static GESTURES: AtomicU64 = AtomicU64::new(0);
+static BADGES: AtomicU64 = AtomicU64::new(0);
+static LAST_REJECT: Lazy<Mutex<&'static str>> = Lazy::new(|| Mutex::new(""));
 
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,6 +96,10 @@ fn selection_window() -> Result<tauri::Window, String> {
         "selection_translate",
         tauri::WindowUrl::App("index.html".into()),
     )
+    // WebView2 windows sharing a user-data directory must use the same browser
+    // options. Match daemon/config; otherwise creation fails asynchronously and
+    // Tauri retains an unusable window handle (FailedToReceiveMessage).
+    .additional_browser_args("--disable-web-security")
     .title("Selection Translation")
     .decorations(false)
     .transparent(true)
@@ -254,7 +263,8 @@ pub fn selection_dismiss() {
 
 #[tauri::command]
 pub fn selection_status() -> serde_json::Value {
-    serde_json::json!({ "enabled": ENABLED.load(Ordering::Relaxed), "supported": cfg!(target_os = "windows"), "listening": LISTENING.load(Ordering::Relaxed), "lastError": LAST_ERROR.lock().unwrap().clone() })
+    serde_json::json!({ "enabled": ENABLED.load(Ordering::Relaxed), "supported": cfg!(target_os = "windows"), "listening": LISTENING.load(Ordering::Relaxed) || POLLING.load(Ordering::Relaxed), "lastError": LAST_ERROR.lock().unwrap().clone(),
+        "mouseEvents": MOUSE_EVENTS.load(Ordering::Relaxed), "gestures": GESTURES.load(Ordering::Relaxed), "badges": BADGES.load(Ordering::Relaxed), "lastReject": *LAST_REJECT.lock().unwrap() })
 }
 
 #[tauri::command]
@@ -346,6 +356,25 @@ mod platform {
 
     pub fn foreground_source() -> isize {
         unsafe { GetForegroundWindow().0 as isize }
+    }
+
+    fn source_at_point(point: POINT) -> isize {
+        unsafe {
+            let hit = wm::WindowFromPoint(point);
+            let root = wm::GetAncestor(hit, wm::GA_ROOTOWNER);
+            let foreground = GetForegroundWindow();
+            let mut hit_pid = 0;
+            let mut foreground_pid = 0;
+            GetWindowThreadProcessId(hit, Some(&mut hit_pid));
+            GetWindowThreadProcessId(foreground, Some(&mut foreground_pid));
+            // Modern editors/PDF viewers can use a separate top-level input
+            // island. Save the actual foreground window for later capture.
+            if hit_pid != 0 && hit_pid == foreground_pid {
+                foreground.0 as isize
+            } else {
+                root.0 as isize
+            }
+        }
     }
 
     fn own_window(source: isize) -> bool {
@@ -690,11 +719,17 @@ mod platform {
     static HOOK_SENDER: Lazy<Mutex<Option<SyncSender<MouseEvent>>>> =
         Lazy::new(|| Mutex::new(None));
     static GESTURE_GENERATION: AtomicU64 = AtomicU64::new(0);
+    static WATCH_CLOCK: Lazy<Instant> = Lazy::new(Instant::now);
+    static LAST_HOOK_EVENT: AtomicU64 = AtomicU64::new(0);
 
     // Hook callbacks only enqueue down/up events; UIA, clipboard and window work
     // run on a separate worker so slow providers cannot swallow mouse gestures.
     unsafe extern "system" fn mouse_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         if code >= 0 && [wm::WM_LBUTTONDOWN, wm::WM_LBUTTONUP].contains(&(wparam.0 as u32)) {
+            LAST_HOOK_EVENT.store(
+                WATCH_CLOCK.elapsed().as_millis() as u64 + 1,
+                Ordering::Relaxed,
+            );
             let data = &*(lparam.0 as *const wm::MSLLHOOKSTRUCT);
             let down = wparam.0 as u32 == wm::WM_LBUTTONDOWN;
             let generation = if down {
@@ -702,13 +737,15 @@ mod platform {
             } else {
                 GESTURE_GENERATION.load(Ordering::Relaxed)
             };
-            let source = wm::GetAncestor(wm::WindowFromPoint(data.pt), wm::GA_ROOT).0 as isize;
             if let Ok(sender) = HOOK_SENDER.try_lock() {
                 if let Some(sender) = sender.as_ref() {
                     let _ = sender.try_send(MouseEvent {
                         down,
                         point: data.pt,
-                        source,
+                        // Resolve the source outside this low-level callback.
+                        // Cross-process window queries can cause Windows to
+                        // silently remove hooks that exceed LowLevelHooksTimeout.
+                        source: 0,
                         time: data.time,
                         generation,
                     });
@@ -771,35 +808,91 @@ mod platform {
     }
 
     pub fn watch() {
+        POLLING.store(true, Ordering::Relaxed);
         let (sender, receiver) = mpsc::sync_channel(128);
         *HOOK_SENDER.lock().unwrap() = Some(sender);
+        Lazy::force(&WATCH_CLOCK);
         std::thread::spawn(hook_loop);
         let mut gestures = GestureTracker::default();
+        let mut polling_gestures = GestureTracker::default();
+        let mut button_down = false;
         let mut badge_shown = None::<Instant>;
         loop {
-            if let Ok(event) = receiver.recv_timeout(Duration::from_millis(100)) {
+            let hook_event = receiver.recv_timeout(Duration::from_millis(10)).ok();
+            let mut poll_event = None;
+            // Windows may silently unregister a WH_MOUSE_LL hook. Keep a cheap,
+            // independent button-state path so drag selection remains usable.
+            unsafe {
+                use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+                let down = GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0;
+                if down != button_down {
+                    button_down = down;
+                    let mut point = POINT::default();
+                    if wm::GetCursorPos(&mut point).is_ok() {
+                        poll_event = Some(MouseEvent {
+                            down,
+                            point,
+                            source: source_at_point(point),
+                            time: WATCH_CLOCK.elapsed().as_millis() as u32,
+                            generation: GESTURE_GENERATION.load(Ordering::Relaxed),
+                        });
+                    }
+                }
+            }
+            for (mut event, polled) in hook_event
+                .into_iter()
+                .map(|e| (e, false))
+                .chain(poll_event.map(|e| (e, true)))
+            {
+                MOUSE_EVENTS.fetch_add(1, Ordering::Relaxed);
+                if !polled {
+                    event.source = source_at_point(event.point);
+                }
                 if !ENABLED.load(Ordering::Relaxed) {
                     gestures = GestureTracker::default();
+                    polling_gestures = GestureTracker::default();
                     continue;
                 }
                 if own_window(event.source) || over_popup(event.point) {
                     gestures = GestureTracker::default();
+                    polling_gestures = GestureTracker::default();
                     continue;
                 }
-                if event.down {
+                let hook_recent = LAST_HOOK_EVENT.load(Ordering::Relaxed);
+                let use_polling = polled
+                    && (hook_recent == 0
+                        || (WATCH_CLOCK.elapsed().as_millis() as u64 + 1)
+                            .saturating_sub(hook_recent)
+                            > 250);
+                if event.down && (!polled || use_polling) {
                     selection_dismiss();
                     badge_shown = None;
                 }
-                let selected = gestures.accept(event);
-                if selected
-                    && event.generation == GESTURE_GENERATION.load(Ordering::Relaxed)
-                    && fallback_candidate(event.point)
-                    && unsafe { GetForegroundWindow().0 as isize } == event.source
-                {
+                let selected = if polled {
+                    polling_gestures.accept(event) && use_polling
+                } else {
+                    gestures.accept(event)
+                };
+                if selected {
+                    GESTURES.fetch_add(1, Ordering::Relaxed);
+                    if event.generation != GESTURE_GENERATION.load(Ordering::Relaxed) {
+                        *LAST_REJECT.lock().unwrap() = "superseded";
+                        continue;
+                    }
+                    if !fallback_candidate(event.point) {
+                        *LAST_REJECT.lock().unwrap() = "not_text_client";
+                        continue;
+                    }
+                    if unsafe { GetForegroundWindow().0 as isize } != event.source {
+                        *LAST_REJECT.lock().unwrap() = "source_not_foreground";
+                        continue;
+                    }
                     // Offer the action immediately, even for PDF viewers without
                     // UIA TextPattern. Read only after the user clicks Translate.
                     match publish(vec![], event.point.x, event.point.y, false, event.source) {
                         Ok(_) => {
+                            BADGES.fetch_add(1, Ordering::Relaxed);
+                            *LAST_REJECT.lock().unwrap() = "";
                             badge_shown = Some(Instant::now());
                             *LAST_ERROR.lock().unwrap() = None;
                         }

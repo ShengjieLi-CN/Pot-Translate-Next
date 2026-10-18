@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { screenshotBackground, paddleScreenshotLayout } from '../src/utils/screenshot_layout.mjs';
+import { needsEnglishScreenshotFallback } from '../src/utils/screenshot_ocr.mjs';
 import {
     restoreScreenshotText,
     detectScreenshotDomain,
@@ -8,6 +10,7 @@ import {
     screenshotServiceConfig,
     translateScreenshotBlocks,
     screenshotSelection,
+    screenshotBlockSource,
 } from '../src/utils/screenshot_translation.mjs';
 
 test('restores PDF hyphenation, paragraphs, and genuine compound words', () => {
@@ -236,4 +239,159 @@ test('service errors stop further requests and allow a new retry', async () => {
     );
     assert.equal(calls, 1);
     assert.equal((await translateScreenshotBlocks(blocks, async (text) => text)).length, 2);
+});
+
+test('separates UI cards and three columns even when OCR gives every line the same paragraph', () => {
+    const lines = [];
+    for (let column = 0; column < 3; column++) {
+        for (let row = 0; row < 2; row++)
+            lines.push({ ...line(`Column ${column} row ${row}`, 10 + column * 220, 20 + row * 20, 150), paragraph: 0 });
+    }
+    const blocks = screenshotBlocks({ lines }, 700, 200);
+    assert.equal(blocks.length, 3);
+    assert.deepEqual(
+        blocks.map((b) => b.box.x),
+        [10, 230, 450]
+    );
+    assert.ok(blocks.every((b) => b.box.width === 150 && b.box.height === 36));
+});
+
+test('a shared OCR line cannot turn a logo and small text on different rows into one rectangle', () => {
+    const blocks = screenshotBlocks(
+        {
+            lines: [
+                {
+                    words: [
+                        word('LOGO', 20, 20, 250, 64),
+                        word('Caption', 20, 110, 80, 10),
+                        word('Right panel', 350, 110, 120, 10),
+                    ],
+                },
+            ],
+        },
+        600,
+        250
+    );
+    assert.equal(blocks.length, 3);
+    assert.ok(blocks.some((b) => b.text === 'Caption' && b.box.y === 110 && b.box.height === 10));
+    assert.ok(blocks.every((b) => b.box.height <= 64));
+});
+
+test('explicit paragraph IDs never join text through another row or across cards', () => {
+    const blocks = screenshotBlocks(
+        {
+            lines: [
+                { ...line('One card', 10, 20, 150), paragraph: 0 },
+                { ...line('Another card', 250, 20, 150), paragraph: 0 },
+                { ...line('Separate paragraph', 10, 90, 150), paragraph: 0 },
+            ],
+        },
+        500,
+        200
+    );
+    assert.equal(blocks.length, 3);
+    assert.ok(blocks.every((b) => b.box.height === 16));
+});
+
+test('maps enlarged provider coordinates to original pixels and deduplicates overlapping tiles', () => {
+    const native = line('A complete sentence', 20, 40, 500, 32);
+    const blocks = screenshotBlocks({ width: 1200, height: 800, lines: [native, structuredClone(native)] }, 600, 400);
+    assert.equal(blocks.length, 1);
+    assert.deepEqual(blocks[0].box, { x: 10, y: 20, width: 250, height: 16 });
+    assert.equal(blocks[0].text, 'A complete sentence');
+});
+
+test('invalid OCR rectangles cannot create NaN or oversized overlays', () => {
+    const blocks = screenshotBlocks(
+        { lines: [line('valid', 10, 20), line('bad', NaN, 30), line('negative', 10, 50, -2)] },
+        500,
+        300
+    );
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0].text, 'valid');
+});
+
+test('local masks sample the original background and choose readable text on dark panels', () => {
+    const width = 80,
+        height = 60,
+        data = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < data.length; i += 4) data.set([0, 0, 0, 255], i);
+    assert.deepEqual(screenshotBackground(data, width, height, { x: 5, y: 5, width: 60, height: 20 }), {
+        background: 'rgb(0, 0, 0)',
+        color: '#fff',
+    });
+    for (let i = 0; i < data.length; i += 4) data.set([255, 190, 32, 255], i);
+    assert.deepEqual(screenshotBackground(data, width, height, { x: 5, y: 5, width: 60, height: 20 }), {
+        background: 'rgb(255, 190, 32)',
+        color: '#172033',
+    });
+});
+
+test('English OCR fallback is local and only replaces Latin-dominant results without an English pack', () => {
+    const result = { englishAvailable: false, lines: [{ text: 'This is a friendly reminder about your parcel.' }] };
+    assert.equal(needsEnglishScreenshotFallback(result), true);
+    assert.equal(needsEnglishScreenshotFallback({ ...result, englishAvailable: true }), false);
+    assert.equal(
+        needsEnglishScreenshotFallback({
+            englishAvailable: false,
+            lines: [{ text: '中文正文包含很多文字，保留原有中文识别效果。English' }],
+        }),
+        false
+    );
+});
+
+test('English body and Chinese interface labels keep their own translation direction', () => {
+    assert.equal(screenshotBlockSource('Your parcel is ready to collect.', 'zh_cn'), 'en');
+    assert.equal(screenshotBlockSource('收件箱和发件箱', 'en'), 'zh_cn');
+    assert.equal(screenshotBlockSource('日本語の文章です', 'ja'), 'ja');
+    assert.equal(screenshotBlockSource('Méthode de traduction', 'fr'), 'fr');
+});
+
+test('preserves collection codes without sending them to a translation model', async () => {
+    let calls = 0;
+    const blocks = screenshotBlocks('123456\n\nA reminder.', 400, 200);
+    const result = await translateScreenshotBlocks(blocks, async () => {
+        calls++;
+        return '取件提醒';
+    });
+    assert.equal(calls, 1);
+    assert.equal(result[0].translation, '123456');
+});
+
+test('Paddle screenshot adapter retains original quadrilateral positions and reports empty/error results', () => {
+    const stdout =
+        'OCR init completed.\n' +
+        JSON.stringify({
+            code: 100,
+            data: [
+                {
+                    text: 'Delivery reminder',
+                    score: 0.98,
+                    box: [
+                        [20, 40],
+                        [620, 40],
+                        [620, 80],
+                        [20, 80],
+                    ],
+                },
+                {
+                    text: 'noise',
+                    score: 0.1,
+                    box: [
+                        [0, 0],
+                        [50, 0],
+                        [50, 50],
+                        [0, 50],
+                    ],
+                },
+            ],
+        });
+    const result = paddleScreenshotLayout(stdout, 1600, 1000);
+    const blocks = screenshotBlocks(result, 800, 500);
+    assert.equal(blocks.length, 1);
+    assert.deepEqual(blocks[0].box, { x: 10, y: 20, width: 300, height: 20 });
+    assert.equal(blocks[0].text, 'Delivery reminder');
+    assert.deepEqual(paddleScreenshotLayout('{"code":101,"data":"No text"}', 100, 100).lines, []);
+    assert.throws(() => paddleScreenshotLayout('{"code":200,"data":"Missing image"}', 100, 100), /Missing image/);
+    assert.throws(() => paddleScreenshotLayout('invalid', 100, 100), /无法解析/);
 });

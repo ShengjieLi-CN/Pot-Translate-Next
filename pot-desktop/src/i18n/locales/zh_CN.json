@@ -86,7 +86,7 @@
                 "placeholder": "在此输入或粘贴内容，自动识别语言…",
                 "result_placeholder": "翻译结果将在这里显示",
                 "translating": "正在翻译…",
-                "hint": "Enter 翻译，Shift+Enter 换行。悬停译句或用 Tab 聚焦，可同步高亮对应原句。",
+                "hint": "输入或粘贴后自动翻译（停顿约 0.6 秒）。Enter 可立即翻译，Shift+Enter 换行。悬停译句可高亮对应原句。",
                 "loading": "正在加载翻译服务…",
                 "load_error": "加载翻译服务失败",
                 "no_service": "请先启用一个翻译服务，然后在这里输入内容进行翻译。",
@@ -403,6 +403,7 @@
                 "cambridge_dict": {
                     "title": "剑桥词典"
                 },
+                "libretranslate": { "title": "LibreTranslate 离线翻译" },
                 "caiyun": {
                     "title": "彩云小译",
                     "token": "Token"

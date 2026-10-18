@@ -1,6 +1,6 @@
 [package]
 name = "pot"
-version = "3.2.0"
+version = "3.2.1"
 description = "Pot App"
 authors = ["pot-app"]
 license = "GPL-3.0-only"
@@ -24,6 +24,7 @@ tauri-plugin-sql = { git= "https://github.com/tauri-apps/plugins-workspace", bra
 serde = { version = "1.0", features = ["derive"] }
 selection = "1.2.0"
 serde_json = "1.0"
+sha2 = "0.10"
 dirs = "5.0.1"
 once_cell = "1.19.0"
 mouse_position = "0.1.4"

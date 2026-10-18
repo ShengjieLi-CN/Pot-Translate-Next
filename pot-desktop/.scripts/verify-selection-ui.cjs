@@ -248,6 +248,8 @@ async function fixture(page, options = {}) {
         await settings.setViewportSize({ width: 1000, height: 750 });
         await fixture(settings, { config: true });
         await settings.goto(`${url}/selection`);
+        await settings.waitForURL('**/translate');
+        assert.equal(await settings.getByRole('button', { name: '划词翻译', exact: true }).count(), 0);
         await settings.getByRole('switch', { name: '启用划词翻译按钮' }).focus();
         await settings.getByRole('switch', { name: '启用划词翻译按钮' }).press('Space');
         await settings.waitForFunction(() => window.__selectionFixture.enabled === false);

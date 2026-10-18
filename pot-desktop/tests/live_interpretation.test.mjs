@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     DEFAULT_STT,
+    resolveSttConfig,
     validateStt,
     encodeWav,
     bytesBase64,
@@ -16,7 +17,7 @@ import {
 } from '../src/utils/live_interpretation.mjs';
 import { LiveSession } from '../src/utils/live_session.mjs';
 
-const config = { ...DEFAULT_STT, model: 'custom-diarize', speakerMode: 'global' };
+const config = { ...DEFAULT_STT, provider: 'custom', model: 'custom-diarize', speakerMode: 'global' };
 const chunk = (offset = 0) => ({ pcm: new Float32Array(16000 * 3).fill(0.2), sampleRate: 16000, offset });
 const untilIdle = async (session) => {
     for (let i = 0; i < 100; i++) {
@@ -253,4 +254,44 @@ test('translation failure can retry while cancellation suppresses late audio and
     await untilIdle(cancelled);
     assert.equal(updates, 0);
     assert.equal(cancelled.rows.length, 0);
+});
+
+test('Qwen defaults and legacy multipart configurations keep the correct provider', () => {
+    assert.equal(resolveSttConfig(null).model, 'qwen-audio-3.1-asr-flash');
+    assert.equal(
+        resolveSttConfig({ endpoint: 'http://localhost:8000/stt', model: 'old', apiKey: 'saved' }).provider,
+        'custom'
+    );
+    assert.equal(resolveSttConfig({ provider: 'custom', endpoint: DEFAULT_STT.endpoint }).provider, 'custom');
+    assert.throws(() => validateStt(DEFAULT_STT), /API Key/);
+    assert.deepEqual(validateStt({ ...DEFAULT_STT, apiKey: 'test' }), {});
+});
+
+test('Qwen output maps millisecond sentences and preserves speaker zero', () => {
+    const segments = normalizeTranscript(
+        {
+            output: {
+                text: 'Hello world',
+                sentences: [
+                    { text: 'Hello', begin_time: 100, end_time: 900, speaker_id: 0 },
+                    { text: 'world', begin_time: 1000, end_time: 1800, speaker_id: 1 },
+                ],
+            },
+        },
+        2
+    );
+    assert.equal(segments[0].speaker, '0');
+    assert.equal(segments[0].start, 0.1);
+    assert.equal(segments[0].end, 0.9);
+    assert.equal(segments[1].speaker, '1');
+    assert.equal(normalizeTranscript({ output: { text: 'Hello', sentences: [] } }, 2)[0].text, 'Hello');
+    assert.equal(normalizeTranscript({ output: { text: 'Hello' } }, 2)[0].text, 'Hello');
+    assert.equal(
+        normalizeTranscript(
+            { output: { text: 'Hello', sentence: { text: 'Hello', begin_time: 0, end_time: 500 } } },
+            2
+        )[0].end,
+        0.5
+    );
+    assert.throws(() => normalizeTranscript({ code: 'InvalidApiKey', message: 'secret' }, 2), /服务返回错误/);
 });

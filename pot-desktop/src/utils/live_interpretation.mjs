@@ -1,21 +1,35 @@
 export const DEFAULT_STT = {
-    endpoint: 'http://127.0.0.1:8000/v1/audio/transcriptions',
+    provider: 'dashscope',
+    endpoint:
+        'https://llm-ni7a2nhi5md5tatk.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
     apiKey: '',
-    model: '',
+    model: 'qwen-audio-3.1-asr-flash',
     responseFormat: 'diarized_json',
     extra: '{}',
     diarization: true,
-    speakerMode: 'embedding',
+    speakerMode: 'local',
     references: false,
     chunkSeconds: 8,
     threshold: 0.8,
 };
 
+export function resolveSttConfig(saved) {
+    if (!saved) return { ...DEFAULT_STT };
+    // Older configurations used multipart exclusively. Do not change their protocol.
+    return {
+        ...DEFAULT_STT,
+        ...saved,
+        provider: saved.provider || (saved.endpoint === DEFAULT_STT.endpoint ? 'dashscope' : 'custom'),
+    };
+}
+
 export function validateStt(config) {
+    if (config.provider && !['dashscope', 'custom'].includes(config.provider)) throw new Error('不支持的 STT 服务商。');
     const url = new URL(config.endpoint);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
         throw new Error('STT 地址必须是 HTTP/HTTPS 接口，且不能包含用户名或密码。');
     if (!config.model?.trim()) throw new Error('请填写 STT 模型名称。');
+    if (config.provider === 'dashscope' && !config.apiKey?.trim()) throw new Error('请填写阿里千问 API Key。');
     const extra = JSON.parse(config.extra || '{}');
     if (!extra || typeof extra !== 'object' || Array.isArray(extra)) throw new Error('附加参数必须是 JSON 对象。');
     if (
@@ -30,6 +44,11 @@ export function validateStt(config) {
         ].some((k) => k in extra)
     )
         throw new Error('附加参数不能覆盖文件、模型、语言、流式开关、返回格式或说话人参考音频。');
+    if (
+        config.provider === 'dashscope' &&
+        ['format', 'sample_rate', 'speaker_diarization_enabled'].some((key) => key in extra)
+    )
+        throw new Error('附加参数不能覆盖音频格式、采样率或说话人分离开关。');
     if (!(Number(config.chunkSeconds) >= 3 && Number(config.chunkSeconds) <= 30))
         throw new Error('分段长度应为 3–30 秒。');
     if (!(Number(config.threshold) > 0 && Number(config.threshold) <= 1))
@@ -124,9 +143,26 @@ export class PcmChunker {
 }
 
 export function normalizeTranscript(response, duration) {
-    const data = typeof response === 'string' ? { text: response } : response?.data ?? response;
+    let data = typeof response === 'string' ? { text: response } : response?.data ?? response;
     if (!data || typeof data !== 'object') throw new Error('STT 返回值必须包含 text 或 segments。');
-    if (data.error) throw new Error('STT 服务返回错误，请检查模型和附加参数。');
+    if (data.error || (data.code && data.code !== '200' && data.code !== 200))
+        throw new Error('STT 服务返回错误，请检查模型和附加参数。');
+    if (data.output) {
+        const output = data.output;
+        const sentences = output.sentences ?? (output.sentence ? [output.sentence] : null);
+        if (sentences != null && !Array.isArray(sentences)) throw new Error('STT sentences 必须是数组。');
+        data = {
+            text: output.text,
+            segments: sentences?.length
+                ? sentences.map((s) => ({
+                      text: s.text,
+                      start: s.begin_time == null ? 0 : Number(s.begin_time) / 1000,
+                      end: s.end_time == null ? duration : Number(s.end_time) / 1000,
+                      speaker: s.speaker_id,
+                  }))
+                : undefined,
+        };
+    }
     const raw = data.segments || data.utterances || data.results?.utterances;
     if (raw != null && !Array.isArray(raw)) throw new Error('STT segments 必须是数组。');
     if (!raw && typeof data.text !== 'string') throw new Error('STT 返回值缺少 text 或 segments。');

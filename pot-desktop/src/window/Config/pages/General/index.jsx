@@ -31,7 +31,7 @@ export default function General() {
     const [appFont, setAppFont] = useConfig('app_font', 'default');
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
     const [appFontSize, setAppFontSize] = useConfig('app_font_size', 16);
-    const [transparent, setTransparent] = useConfig('transparent', true);
+    const [windowMaterial, setWindowMaterial] = useConfig('window_material', 'none');
     const [devMode, setDevMode] = useConfig('dev_mode', false);
     const [trayClickEvent, setTrayClickEvent] = useConfig('tray_click_event', 'config');
     const [proxyEnable, setProxyEnable] = useConfig('proxy_enable', false);
@@ -309,16 +309,25 @@ export default function General() {
                             </Dropdown>
                         )}
                     </div>
-                    <div className={`config-item ${osType === 'Darwin' && 'hidden'}`}>
-                        <h3>{t('config.general.transparent')}</h3>
-                        {transparent !== null && (
-                            <Switch
-                                isSelected={transparent}
-                                onValueChange={(v) => {
-                                    setTransparent(v);
-                                }}
-                            />
-                        )}
+                    <div className='config-item'>
+                        <div>
+                            <h3>背景材质</h3>
+                            <p className='text-xs text-default-500 mt-1'>
+                                Liquid Glass 为仿苹果玻璃风格；系统关闭透明效果时材质可能呈现为实色。
+                            </p>
+                        </div>
+                        <select
+                            aria-label='背景材质'
+                            className='material-select'
+                            value={windowMaterial || 'none'}
+                            disabled={windowMaterial === null}
+                            onChange={(event) => setWindowMaterial(event.target.value)}
+                        >
+                            <option value='none'>无（默认不透明背景）</option>
+                            <option value='mica'>Mica（柔和半透明材质）</option>
+                            <option value='acrylic'>Acrylic（模糊透明毛玻璃）</option>
+                            <option value='liquid'>Apple Liquid Glass（仿玻璃风格）</option>
+                        </select>
                     </div>
                     <div className='config-item'>
                         <h3>{t('config.general.dev_mode')}</h3>

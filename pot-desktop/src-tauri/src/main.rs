@@ -16,6 +16,8 @@ mod system_ocr;
 mod tray;
 mod updater;
 mod window;
+mod window_material;
+mod libretranslate;
 
 use backup::*;
 use clipboard::*;
@@ -81,6 +83,7 @@ fn main() {
             info!("Init Config Store");
             init_config(app);
             let first_run = is_first_run();
+            libretranslate::register_default_service();
             // The maintained distribution uses Simplified Chinese UI and tray.
             if get("app_language").and_then(|v| v.as_str().map(str::to_owned)).as_deref() != Some("zh_cn") {
                 set("app_language", "zh_cn");
@@ -136,6 +139,10 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            libretranslate::libretranslate_status,
+            libretranslate::libretranslate_install,
+            libretranslate::libretranslate_translate,
+            window_material::set_window_material,
             reload_store,
             selection_translate::selection_payload,
             selection_translate::selection_open,
@@ -170,6 +177,12 @@ fn main() {
         ])
         .on_system_tray_event(tray_event_handler)
         .on_window_event(|event| {
+            if event.window().label() == "selection_translate" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
+                    api.prevent_close();
+                    selection_translate::selection_dismiss();
+                }
+            }
             if matches!(event.event(), tauri::WindowEvent::Destroyed) { live_audio::stop_for_window(event.window().label()); }
         })
         .build(tauri::generate_context!())

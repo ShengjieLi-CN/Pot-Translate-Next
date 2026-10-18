@@ -11,6 +11,7 @@ import { store } from '../../../../utils/store';
 import { languageList } from '../../../../utils/language';
 import {
     DEFAULT_STT,
+    resolveSttConfig,
     PcmChunker,
     pcmFromBase64,
     concatenate,
@@ -87,7 +88,7 @@ export default function LiveInterpretation() {
     }, [config]);
 
     useEffect(() => {
-        if (savedConfig) setConfig({ ...DEFAULT_STT, ...savedConfig });
+        if (savedConfig) setConfig(resolveSttConfig(savedConfig));
     }, [savedConfig]);
     useEffect(() => {
         if (!translateKeys) return;
@@ -601,10 +602,39 @@ export default function LiveInterpretation() {
                         <h3>{L('自定义 Speech-to-Text 模型', 'Custom Speech-to-Text model')}</h3>
                         <p className='live-help'>
                             {L(
-                                '使用兼容 multipart 音频转写接口。本地模型无需 API Key；云端请填写自己的访问凭据。',
+                                '默认使用阿里千问，音频以 WAV/Base64 发送。也可选择自定义 multipart 兼容接口。请填写自己的 API Key。',
                                 'Use a multipart-compatible transcription endpoint. Local servers may not require an API key.'
                             )}
                         </p>
+                        {select(
+                            'STT 服务商',
+                            config.provider,
+                            [
+                                ['dashscope', '阿里千问（百炼）'],
+                                ['custom', '自定义兼容接口'],
+                            ],
+                            (provider) => {
+                                setConfig((current) => ({
+                                    ...current,
+                                    provider,
+                                    endpoint:
+                                        provider === 'dashscope'
+                                            ? DEFAULT_STT.endpoint
+                                            : 'http://127.0.0.1:8000/v1/audio/transcriptions',
+                                    model: provider === 'dashscope' ? DEFAULT_STT.model : '',
+                                    apiKey: '',
+                                    extra: '{}',
+                                    references: false,
+                                    speakerMode: provider === 'dashscope' ? 'local' : 'embedding',
+                                }));
+                            }
+                        )}
+                        {config.provider === 'dashscope' && (
+                            <p className='live-help'>
+                                附加参数将放入
+                                parameters。千问支持片段内说话人分离，不返回声纹向量；跨片段关联依赖重叠语音，无法保证身份始终一致。参考音频和返回格式仅适用于自定义接口。
+                            </p>
+                        )}
                         {formField(L('STT 接口地址', 'STT endpoint'), 'endpoint', 'url')}
                         <div className='live-source-options'>
                             {formField('API Key', 'apiKey', 'password')}
@@ -632,16 +662,17 @@ export default function LiveInterpretation() {
                             />
                             {L('区分说话人', 'Speaker diarization')}
                         </label>
-                        {select(
-                            L('说话人关联方式', 'Speaker matching'),
-                            config.speakerMode,
-                            [
-                                ['embedding', L('声纹向量（推荐）', 'Voice embeddings (recommended)')],
-                                ['global', L('服务返回会话级 ID', 'Session-wide speaker IDs')],
-                                ['local', L('片段标签 + 重叠语音', 'Chunk labels + overlapping speech')],
-                            ],
-                            (v) => update('speakerMode', v)
-                        )}
+                        {config.provider !== 'dashscope' &&
+                            select(
+                                L('说话人关联方式', 'Speaker matching'),
+                                config.speakerMode,
+                                [
+                                    ['embedding', L('声纹向量（推荐）', 'Voice embeddings (recommended)')],
+                                    ['global', L('服务返回会话级 ID', 'Session-wide speaker IDs')],
+                                    ['local', L('片段标签 + 重叠语音', 'Chunk labels + overlapping speech')],
+                                ],
+                                (v) => update('speakerMode', v)
+                            )}
                         {config.speakerMode === 'embedding' &&
                             formField(
                                 L('声纹相似度阈值（0–1）', 'Voice similarity threshold (0–1)'),
@@ -652,7 +683,7 @@ export default function LiveInterpretation() {
                             <input
                                 type='checkbox'
                                 checked={config.references}
-                                disabled={editingDisabled}
+                                disabled={editingDisabled || config.provider === 'dashscope'}
                                 onChange={(e) => update('references', e.target.checked)}
                             />
                             {L(
@@ -701,6 +732,7 @@ export default function LiveInterpretation() {
                                 onPress={() =>
                                     setConfig({
                                         ...DEFAULT_STT,
+                                        provider: 'custom',
                                         endpoint: 'https://api.openai.com/v1/audio/transcriptions',
                                         model: 'gpt-4o-transcribe-diarize',
                                         speakerMode: 'local',

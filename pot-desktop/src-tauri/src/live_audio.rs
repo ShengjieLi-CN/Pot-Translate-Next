@@ -256,6 +256,10 @@ fn capture_windows(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SttConfig {
+    #[serde(default)]
+    provider: String,
+    #[serde(default)]
+    diarization: bool,
     endpoint: String,
     api_key: String,
     model: String,
@@ -308,56 +312,93 @@ pub async fn live_transcribe(
     if extra.keys().any(|k| reserved.contains(&k.as_str())) {
         return Err("STT 附加参数不能覆盖核心字段。".into());
     }
-    let mut form = Form::new()
-        .part(
-            "file",
-            Part::bytes(bytes)
-                .file_name("live.wav")
-                .mime_str("audio/wav")
-                .map_err(|_| "Invalid WAV MIME")?,
-        )
-        .text("model", config.model)
-        .text("response_format", config.response_format)
-        .text("stream", "false");
-    if language != "auto" {
-        form = form.text("language", language);
-    }
-    for (key, value) in extra {
-        if let Some(items) = value.as_array() {
-            for item in items {
-                form = form.text(
-                    format!("{key}[]"),
-                    item.as_str()
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| item.to_string()),
-                );
-            }
-        } else {
-            form = form.text(
-                key.clone(),
-                value
-                    .as_str()
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| value.to_string()),
-            );
-        }
-    }
-    for reference in references.into_iter().take(4) {
-        if !reference.audio.starts_with("data:audio/wav;base64,")
-            || reference.audio.len() > 6_000_000
-        {
-            return Err("说话人参考音频无效。".into());
-        }
-        form = form
-            .text("known_speaker_names[]", reference.name)
-            .text("known_speaker_references[]", reference.audio);
-    }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| "无法创建 STT 请求")?;
-    let mut request = client.post(url).multipart(form);
+    let mut request = match config.provider.as_str() {
+        "dashscope" => {
+            if config.api_key.trim().is_empty() {
+                return Err("请填写阿里千问 API Key。".into());
+            }
+            if ["format", "sample_rate", "speaker_diarization_enabled"]
+                .iter()
+                .any(|key| extra.contains_key(*key))
+            {
+                return Err("附加参数不能覆盖音频格式、采样率或说话人分离开关。".into());
+            }
+            let sample_rate = u32::from_le_bytes(bytes[24..28].try_into().unwrap());
+            let mut parameters = extra.clone();
+            parameters.insert("format".into(), Value::String("wav".into()));
+            parameters.insert("sample_rate".into(), Value::String(sample_rate.to_string()));
+            parameters.insert(
+                "speaker_diarization_enabled".into(),
+                Value::Bool(config.diarization),
+            );
+            if language != "auto"
+                && !config.diarization
+                && !parameters.contains_key("language_hints")
+            {
+                parameters.insert("language_hints".into(), serde_json::json!([language]));
+            }
+            client.post(url).header("X-DashScope-SSE", "disable").json(&serde_json::json!({
+                "model": config.model,
+                "input": {"messages": [{"role": "user", "content": [{
+                    "type": "input_audio", "input_audio": {"data": format!("data:audio/wav;base64,{}", STANDARD.encode(&bytes))}
+                }]}]},
+                "parameters": parameters
+            }))
+        }
+        "" | "custom" => {
+            let mut form = Form::new()
+                .part(
+                    "file",
+                    Part::bytes(bytes)
+                        .file_name("live.wav")
+                        .mime_str("audio/wav")
+                        .map_err(|_| "Invalid WAV MIME")?,
+                )
+                .text("model", config.model)
+                .text("response_format", config.response_format)
+                .text("stream", "false");
+            if language != "auto" {
+                form = form.text("language", language);
+            }
+            for (key, value) in extra {
+                if let Some(items) = value.as_array() {
+                    for item in items {
+                        form = form.text(
+                            format!("{key}[]"),
+                            item.as_str()
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| item.to_string()),
+                        );
+                    }
+                } else {
+                    form = form.text(
+                        key.clone(),
+                        value
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| value.to_string()),
+                    );
+                }
+            }
+            for reference in references.into_iter().take(4) {
+                if !reference.audio.starts_with("data:audio/wav;base64,")
+                    || reference.audio.len() > 6_000_000
+                {
+                    return Err("说话人参考音频无效。".into());
+                }
+                form = form
+                    .text("known_speaker_names[]", reference.name)
+                    .text("known_speaker_references[]", reference.audio);
+            }
+            client.post(url).multipart(form)
+        }
+        _ => return Err("不支持的 STT 服务商。".into()),
+    };
     if !config.api_key.is_empty() {
         request = request.bearer_auth(config.api_key);
     }
@@ -435,6 +476,8 @@ mod tests {
         audio[8..12].copy_from_slice(b"WAVE");
         let result = tauri::async_runtime::block_on(live_transcribe(
             SttConfig {
+                provider: "custom".into(),
+                diarization: true,
                 endpoint: format!("http://{address}/v1/audio/transcriptions"),
                 api_key: String::new(),
                 model: "custom-stt".into(),
@@ -450,6 +493,91 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(result["segments"][0]["speaker"], "A");
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn qwen_stt_posts_json_audio_and_diarization() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0u8; 8192];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(index) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&bytes[..index]).to_lowercase();
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .unwrap()
+                        .trim()
+                        .parse()
+                        .unwrap();
+                    if bytes.len() >= index + 4 + length {
+                        break;
+                    }
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes);
+            assert!(request
+                .to_lowercase()
+                .contains("content-type: application/json"));
+            assert!(request.to_lowercase().contains("x-dashscope-sse: disable"));
+            assert!(request
+                .to_lowercase()
+                .contains("authorization: bearer test-key"));
+            let (_, payload) = request.split_once("\r\n\r\n").unwrap();
+            let payload: Value = serde_json::from_str(payload).unwrap();
+            assert_eq!(payload["model"], "qwen-audio-3.1-asr-flash");
+            assert_eq!(payload["parameters"]["sample_rate"], "16000");
+            assert_eq!(payload["parameters"]["format"], "wav");
+            assert_eq!(payload["parameters"]["speaker_diarization_enabled"], true);
+            assert_eq!(payload["parameters"]["vocabulary"]["RNA"], 5);
+            assert!(payload["parameters"].get("language_hints").is_none());
+            let data = payload["input"]["messages"][0]["content"][0]["input_audio"]["data"]
+                .as_str()
+                .unwrap();
+            let wav = STANDARD
+                .decode(data.strip_prefix("data:audio/wav;base64,").unwrap())
+                .unwrap();
+            assert_eq!(&wav[..4], b"RIFF");
+            assert_eq!(u32::from_le_bytes(wav[24..28].try_into().unwrap()), 16000);
+            let body = r#"{"output":{"text":"Hello"}}"#;
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+        });
+        let mut audio = vec![0; 46];
+        audio[..4].copy_from_slice(b"RIFF");
+        audio[8..12].copy_from_slice(b"WAVE");
+        audio[24..28].copy_from_slice(&16000u32.to_le_bytes());
+        let result = tauri::async_runtime::block_on(live_transcribe(
+            SttConfig {
+                provider: "dashscope".into(),
+                diarization: true,
+                endpoint: format!("http://{address}/v1/audio/transcriptions"),
+                api_key: "test-key".into(),
+                model: "qwen-audio-3.1-asr-flash".into(),
+                response_format: "diarized_json".into(),
+                extra: r#"{"vocabulary":{"RNA":5}}"#.into(),
+            },
+            STANDARD.encode(audio),
+            "en".into(),
+            vec![SpeakerReference {
+                name: "speaker_1".into(),
+                audio: "data:audio/wav;base64,UklGRg==".into(),
+            }],
+        ))
+        .unwrap();
+        assert_eq!(result["output"]["text"], "Hello");
         server.join().unwrap();
     }
 

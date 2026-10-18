@@ -13,10 +13,13 @@ import detect from '../../utils/lang_detect';
 import {
     detectScreenshotDomain,
     screenshotBlocks,
+    screenshotBlockSource,
     screenshotServiceConfig,
     translateScreenshotBlocks,
 } from '../../utils/screenshot_translation.mjs';
 import './style.css';
+import { screenshotBackground } from '../../utils/screenshot_layout.mjs';
+import { recognizeScreenshotPlugin } from '../../services/screenshot_recognition';
 
 const defaultTranslations = ['deepl', 'bing', 'lingva', 'yandex', 'google', 'ecdict'];
 const promptServices = ['openai', 'ollama', 'chatglm', 'geminipro'];
@@ -44,31 +47,31 @@ async function loadService(type, key) {
     return { ...service, key, name, config };
 }
 
-function FittedBlock({ block, width, height, scale }) {
+function FittedBlock({ block, width, height, scale, colors }) {
     const ref = useRef(null);
+    // Include antialiased edge pixels missed by the OCR ink rectangle.
+    const left = Math.max(0, block.box.x - 2);
+    const top = Math.max(0, block.box.y - 2);
+    const right = Math.min(width, block.box.x + block.box.width + 2);
+    const bottom = Math.min(height, block.box.y + block.box.height + 2);
     useLayoutEffect(() => {
         const node = ref.current;
         if (!node) return;
         const fit = () => {
-            let size = Math.max(
-                10,
-                Math.min(
-                    28,
-                    (block.box.height * scale) / Math.max(1, block.text.length / Math.max(8, block.box.width / 8))
-                )
-            );
+            node.dataset.overflow = 'false';
+            let size = Math.max(7, Math.min(64, (block.fontHeight || block.box.height) * scale * 0.9));
             node.style.fontSize = `${size}px`;
-            while (
-                size > 10 &&
-                (node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1)
-            ) {
-                size -= 0.5;
+            while (size > 7 && (node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth)) {
+                size = Math.max(7, size - 0.5);
                 node.style.fontSize = `${size}px`;
             }
+            node.dataset.overflow = String(
+                node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1
+            );
         };
         fit();
         const observer = new ResizeObserver(fit);
-        observer.observe(node);
+        observer.observe(node, { box: 'border-box' });
         return () => observer.disconnect();
     }, [block, scale]);
     const Tag = block.kind === 'heading' ? 'h3' : 'p';
@@ -77,11 +80,15 @@ function FittedBlock({ block, width, height, scale }) {
             ref={ref}
             className={`screenshot-block ${block.kind}`}
             tabIndex={0}
+            data-block-id={block.id}
             style={{
-                left: `${(100 * block.box.x) / width}%`,
-                top: `${(100 * block.box.y) / height}%`,
-                width: `${(100 * block.box.width) / width}%`,
-                height: `${(100 * block.box.height) / height}%`,
+                background: colors?.background || '#fff',
+                color: colors?.color || '#172033',
+                left: `${(100 * left) / width}%`,
+                top: `${(100 * top) / height}%`,
+                width: `${(100 * (right - left)) / width}%`,
+                height: `${(100 * (bottom - top)) / height}%`,
+                padding: `${2 * scale}px`,
             }}
         >
             {block.translation || block.text}
@@ -112,6 +119,29 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
     const controlsRef = useRef(null);
     const [controlsPosition, setControlsPosition] = useState({ left: 12, top: 12 });
     const [scale, setScale] = useState(1);
+    const [pixels, setPixels] = useState(null);
+
+    useEffect(() => {
+        let disposed = false;
+        setPixels(null);
+        const image = new Image();
+        image.src = `data:image/png;base64,${capture.base64}`;
+        image
+            .decode()
+            .then(() => {
+                if (disposed) return;
+                const canvas = document.createElement('canvas');
+                canvas.width = capture.width;
+                canvas.height = capture.height;
+                const context = canvas.getContext('2d', { willReadFrequently: true });
+                context.drawImage(image, 0, 0, capture.width, capture.height);
+                setPixels(context.getImageData(0, 0, capture.width, capture.height).data);
+            })
+            .catch(() => {});
+        return () => {
+            disposed = true;
+        };
+    }, [capture]);
 
     useEffect(() => {
         if (!translateKeys || !recognizeKeys) return;
@@ -188,9 +218,13 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                 setStatus('recognizing');
                 let result;
                 if (ocr.plugin) {
-                    const [func, utils] = await invoke_plugin('recognize', ocr.name);
-                    if (!isCurrent()) return;
-                    result = await func(capture.base64, ocr.Language[ocrLanguage], { config: ocr.config, utils });
+                    result = await recognizeScreenshotPlugin(
+                        ocr,
+                        capture,
+                        ocr.Language[ocrLanguage],
+                        isCurrent,
+                        ocrLanguage === 'auto'
+                    );
                 } else {
                     result = await (ocr.recognizeLayout || ocr.recognize)(capture.base64, ocr.Language[ocrLanguage], {
                         config: ocr.config,
@@ -223,15 +257,18 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
             const config = screenshotServiceConfig(service.name, service.config, context);
             await translateScreenshotBlocks(
                 recognized,
-                (text, setResult) =>
-                    from === target
+                (text, setResult) => {
+                    const blockFrom = source === 'auto' ? screenshotBlockSource(text, from) : from;
+                    if (!(blockFrom in service.Language)) throw new Error(t('screenshot.unsupported_language'));
+                    return blockFrom === target
                         ? Promise.resolve(text)
-                        : func(text, service.Language[from], service.Language[target], {
+                        : func(text, service.Language[blockFrom], service.Language[target], {
                               config,
                               utils,
-                              detect: from,
+                              detect: blockFrom,
                               setResult,
-                          }),
+                          });
+                },
                 {
                     isCurrent,
                     onUpdate: (translated) => setBlocks([...translated, ...recognized.slice(translated.length)]),
@@ -337,24 +374,31 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                 />
                 {!original && blocks.length > 0 && (
                     <div className={`screenshot-paper ${blocks.every((b) => b.box) ? '' : 'text-only'}`}>
-                        {blocks.map((block) =>
-                            block.box ? (
-                                <FittedBlock
-                                    key={block.id}
-                                    block={block}
-                                    width={capture.width}
-                                    height={capture.height}
-                                    scale={scale}
-                                />
-                            ) : (
-                                <div
-                                    key={block.id}
-                                    className={block.kind}
-                                >
-                                    {block.translation || block.text}
-                                </div>
-                            )
-                        )}
+                        {blocks
+                            .filter((block) => !block.box || (block.translation && block.translation !== block.text))
+                            .map((block) =>
+                                block.box ? (
+                                    <FittedBlock
+                                        key={block.id}
+                                        block={block}
+                                        width={capture.width}
+                                        height={capture.height}
+                                        scale={scale}
+                                        colors={
+                                            pixels
+                                                ? screenshotBackground(pixels, capture.width, capture.height, block.box)
+                                                : null
+                                        }
+                                    />
+                                ) : (
+                                    <div
+                                        key={block.id}
+                                        className={block.kind}
+                                    >
+                                        {block.translation || block.text}
+                                    </div>
+                                )
+                            )}
                     </div>
                 )}
                 {busy && !blocks.length && (

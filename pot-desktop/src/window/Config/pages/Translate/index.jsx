@@ -12,6 +12,7 @@ import React from 'react';
 import { languageList } from '../../../../utils/language';
 import { useConfig } from '../../../../hooks/useConfig';
 import { invoke } from '@tauri-apps/api';
+import SelectionSettings from './SelectionSettings';
 
 export default function Translate() {
     const [sourceLanguage, setSourceLanguage] = useConfig('translate_source_language', 'auto');
@@ -36,6 +37,7 @@ export default function Translate() {
 
     return (
         <>
+            <SelectionSettings />
             <Card className='mb-[10px]'>
                 <CardBody>
                     <div className='config-item'>

@@ -92,6 +92,7 @@ export default function TargetArea(props) {
 
     const sourceText = useAtomValue(sourceTextAtom);
     const sourceDraft = useAtomValue(sourceDraftAtom);
+    const draftReady = !embedded || sourceDraft === sourceText;
     const canHighlight = sourceDraft.trim() === sourceText.trim();
     const configuredSourceLanguage = useAtomValue(sourceLanguageAtom);
     const configuredTargetLanguage = useAtomValue(targetLanguageAtom);
@@ -125,6 +126,7 @@ export default function TargetArea(props) {
         setResult('');
         setError('');
         if (
+            draftReady &&
             sourceText.trim() !== '' &&
             sourceLanguage &&
             targetLanguage &&
@@ -146,6 +148,7 @@ export default function TargetArea(props) {
             setActiveSentence((active) => (active?.service === name ? null : active));
         };
     }, [
+        draftReady,
         sourceText,
         sourceLanguage,
         targetLanguage,

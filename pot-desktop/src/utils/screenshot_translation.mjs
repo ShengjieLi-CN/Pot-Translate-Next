@@ -1,3 +1,5 @@
+import { layoutScreenshotBlocks } from './screenshot_layout.mjs';
+
 // Screenshot text is data. Never interpret instructions found inside a screenshot.
 export function restoreScreenshotText(text) {
     return (
@@ -63,20 +65,10 @@ export function screenshotServiceConfig(name, config, context) {
     return { ...config };
 }
 
-function boxOf(words) {
-    const x = Math.min(...words.map((w) => w.box.x));
-    const y = Math.min(...words.map((w) => w.box.y));
-    return {
-        x,
-        y,
-        width: Math.max(...words.map((w) => w.box.x + w.box.width)) - x,
-        height: Math.max(...words.map((w) => w.box.y + w.box.height)) - y,
-    };
-}
-
-const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] || 16;
 const isHeading = (text) =>
-    /^(?:abstract|introduction|methods?|results?|discussion|background|conclusions?|references|摘要|引言|方法|结果|讨论|结论|参考文献)[.:：]?$/i.test(text.trim());
+    /^(?:abstract|introduction|methods?|results?|discussion|background|conclusions?|references|摘要|引言|方法|结果|讨论|结论|参考文献)[.:：]?$/i.test(
+        text.trim()
+    );
 
 export function screenshotBlocks(result, width, height) {
     if (typeof result === 'string' || !result?.lines?.length) {
@@ -87,102 +79,17 @@ export function screenshotBlocks(result, width, height) {
             .split(/\n\n+/)
             .map((text, i) => ({ id: i, text, kind: isHeading(text) ? 'heading' : 'paragraph', box: null }));
     }
-    const lines = result.lines.flatMap((line) => {
-        const words = (line.words ?? []).filter((word) => {
-            const b = word.box;
-            if (!b || !word.text?.trim()) return false;
-            // Only geometry is evidence of clipping; never drop a short word just because it is near an edge.
-            // A complete line box overrides Tesseract's occasionally oversized
-            // word baseline boxes; those alone are not evidence of clipping.
-            const lineBox = line.box;
-            return (
-                (lineBox?.x > 0.5 || b.x > 0.5) &&
-                (lineBox?.y > 0.5 || b.y > 0.5) &&
-                ((lineBox && lineBox.x + lineBox.width < width - 0.5) || b.x + b.width < width - 0.5) &&
-                ((lineBox && lineBox.y + lineBox.height < height - 0.5) || b.y + b.height < height - 0.5)
-            );
-        });
-        if (line.words?.length && !words.length) return [];
-        if (!words.length) return line.text?.trim() && line.box ? [{ ...line, text: line.text.trim() }] : [];
-        // Windows may emit a single OCR line spanning both PDF columns.
-        const segments = [[]];
-        const sorted = [...words].sort((a, b) => a.box.x - b.box.x);
-        for (const word of sorted) {
-            const segment = segments.at(-1),
-                previous = segment.at(-1);
-            if (
-                previous &&
-                word.box.x - previous.box.x - previous.box.width > Math.max(width * 0.025, word.box.height * 2.2)
-            )
-                segments.push([]);
-            segments.at(-1).push(word);
-        }
-        if (segments.length === 1 && words.length === line.words.length && line.box) {
-            return [{ ...line, text: line.text.trim() }];
-        }
-        return segments.map((segment) => ({
-            ...line,
-            text: segment.map((w) => w.text).join(' '),
-            box: boxOf(segment),
-        }));
-    });
-    if (!lines.length) return [];
-    const lineHeight = median(lines.map((l) => l.box.height));
-    // Infer a gutter only where two non-overlapping lines actually share a row.
-    const gutters = [];
-    for (const left of lines)
-        for (const right of lines) {
-            const gap = right.box.x - (left.box.x + left.box.width);
-            if (
-                gap > width * 0.025 &&
-                gap < width * 0.25 &&
-                Math.abs(left.box.y - right.box.y) < lineHeight * 0.6 &&
-                left.box.width > width * 0.2 &&
-                right.box.width > width * 0.2
-            ) {
-                gutters.push(left.box.x + left.box.width + gap / 2);
-            }
-        }
-    const gutter = gutters.length >= 2 ? median(gutters) : null;
-    const columns = gutter ? [[], [], []] : [[]];
-    for (const line of lines) {
-        const b = line.box;
-        const column = gutter ? (b.x < gutter && b.x + b.width > gutter ? 0 : b.x < gutter ? 1 : 2) : 0;
-        columns[column].push(line);
-    }
-    const blocks = [];
-    for (const column of columns) {
-        column.sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
-        let group = [];
-        const flush = () => {
-            if (!group.length) return;
-            const box = boxOf(group);
-            const text = restoreScreenshotText(group.map((l) => l.text).join('\n'));
-            blocks.push({
-                text,
-                box,
-                kind:
-                    isHeading(text) || (text.length <= 100 && group.length <= 3 && box.height / group.length > lineHeight * 1.25)
-                        ? 'heading'
-                        : 'paragraph',
-            });
-            group = [];
-        };
-        for (const line of column) {
-            const last = group.at(-1);
-            const explicitParagraphs = line.paragraph != null && last?.paragraph != null;
-            const paragraphBreak = explicitParagraphs
-                ? line.paragraph !== last.paragraph
-                : last &&
-                  (line.box.y - last.box.y - last.box.height > lineHeight * 0.8 ||
-                      Math.abs(line.box.height - last.box.height) > lineHeight * 0.3 ||
-                      line.box.x - last.box.x > lineHeight * 1.2);
-            if (last && (paragraphBreak || isHeading(last.text) || isHeading(line.text))) flush();
-            group.push(line);
-        }
-        flush();
-    }
-    return blocks.map((block, id) => ({ ...block, id }));
+    return layoutScreenshotBlocks(result, width, height, restoreScreenshotText);
+}
+
+export function screenshotBlockSource(text, fallback) {
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    const chinese = (text.match(/[\u3400-\u9fff]/g) || []).length;
+    const otherCjk = /[\u3040-\u30ff\uac00-\ud7af]/.test(text);
+    if (!otherCjk && !chinese && latin && ['zh_cn', 'zh_tw', 'yue', 'ja', 'ko'].includes(fallback)) return 'en';
+    if (!otherCjk && chinese >= 2 && chinese > latin * 2 && !['zh_cn', 'zh_tw', 'yue', 'ja'].includes(fallback))
+        return 'zh_cn';
+    return fallback;
 }
 
 export async function translateScreenshotBlocks(
@@ -193,9 +100,12 @@ export async function translateScreenshotBlocks(
     const output = [];
     for (const block of blocks) {
         if (!isCurrent()) return null;
-        const translated = await translate(block.text, (value) => {
-            if (isCurrent() && typeof value === 'string') onUpdate([...output, { ...block, translation: value }]);
-        });
+        // Collection codes, numbers and symbols must survive byte-for-byte.
+        const translated = !/\p{L}/u.test(block.text)
+            ? block.text
+            : await translate(block.text, (value) => {
+                  if (isCurrent() && typeof value === 'string') onUpdate([...output, { ...block, translation: value }]);
+              });
         if (!isCurrent()) return null;
         if (typeof translated !== 'string' || !translated.trim() || translated === '[STREAM]') {
             throw new Error('Screenshot translation requires a text translation service.');
