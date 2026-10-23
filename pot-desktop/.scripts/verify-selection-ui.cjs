@@ -61,6 +61,10 @@ async function fixture(page, options = {}) {
                     });
                     return done(null);
                 }
+                if (request.cmd === 'selection_set_pinned') {
+                    state.pinned = request.pinned;
+                    return done(null);
+                }
                 if (request.cmd === 'selection_dismiss') {
                     await window.__setSelection(null);
                     return done(null);
@@ -129,9 +133,17 @@ async function fixture(page, options = {}) {
         await fixture(page);
         await page.goto(url);
         await page.getByRole('button', { name: '翻译选中文字' }).waitFor();
+        if (process.env.SELECTION_BADGE_PREVIEW) await page.locator('.selection-badge').screenshot({ path: process.env.SELECTION_BADGE_PREVIEW, omitBackground: true });
+        const badge = await page.getByRole('button', { name: '翻译选中文字' }).boundingBox();
+        assert.equal(badge.width, 40);
+        assert.equal(badge.height, 40);
+        assert.equal(await page.locator('.selection-badge').evaluate(n => getComputedStyle(n).borderRadius), '50%');
+        for (const selector of ['html', 'body', '#root']) {
+            assert.equal(await page.locator(selector).evaluate(n => getComputedStyle(n).backgroundColor), 'rgba(0, 0, 0, 0)');
+        }
         assert.equal(await page.evaluate(() => window.__selectionFixture.requests.length), 0);
         await page.getByRole('button', { name: '翻译选中文字' }).click();
-        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button').disabled);
+        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button[aria-label="复制译文"]').disabled);
         assert.equal(await page.locator('.selection-paragraph').count(), 3);
         assert.equal(
             await page.locator('.selection-paragraph').nth(1).textContent(),
@@ -167,6 +179,12 @@ async function fixture(page, options = {}) {
             /geometrical RNA structure is predicted\. Another sentence follows\./
         );
         assert.match(requests[0].body.payload.messages[0].content, /untrusted data/);
+        await page.getByRole('button', { name: '窗口置顶', exact: true }).click();
+        assert.equal(await page.getByRole('button', { name: '取消窗口置顶' }).getAttribute('aria-pressed'), 'true');
+        assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), true);
+        if (process.env.SELECTION_PIN_PREVIEW) await page.screenshot({ path: process.env.SELECTION_PIN_PREVIEW, omitBackground: true });
+        await page.getByRole('button', { name: '取消窗口置顶' }).click();
+        assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), false);
         await page.getByRole('button', { name: '复制译文' }).click();
         assert.equal(
             await page.evaluate(() => window.__fixture.clipboard),
@@ -184,7 +202,7 @@ async function fixture(page, options = {}) {
             window.__selectionFixture.fail = false;
         });
         await page.getByRole('button', { name: '重试' }).click();
-        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button').disabled);
+        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button[aria-label="复制译文"]').disabled);
 
         await page.evaluate(async () => {
             window.__selectionFixture.hold = true;

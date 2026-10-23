@@ -7,6 +7,7 @@ use std::sync::{
 };
 use tauri::Manager;
 
+static RESULT_PINNED: AtomicBool = AtomicBool::new(false);
 static ENABLED: AtomicBool = AtomicBool::new(true);
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static CURRENT: Lazy<Mutex<Option<Selection>>> = Lazy::new(|| Mutex::new(None));
@@ -108,7 +109,7 @@ fn selection_window() -> Result<tauri::Window, String> {
     .skip_taskbar(true)
     .always_on_top(true)
     .resizable(true)
-    .inner_size(62.0, 36.0)
+    .inner_size(40.0, 40.0)
     .build()
     .map_err(|e| e.to_string())
 }
@@ -122,8 +123,8 @@ fn position_window(window: &tauri::Window, x: i32, y: i32, result: bool) {
     });
     if let Some(m) = monitor {
         let dpi = m.scale_factor();
-        let width = ((if result { 520.0 } else { 62.0 }) * dpi).min(m.size().width as f64 - 24.0);
-        let height = ((if result { 360.0 } else { 36.0 }) * dpi).min(m.size().height as f64 - 64.0);
+        let width = ((if result { 520.0 } else { 40.0 }) * dpi).min(m.size().width as f64 - 24.0);
+        let height = ((if result { 360.0 } else { 40.0 }) * dpi).min(m.size().height as f64 - 64.0);
         let p = m.position();
         let left = (x + (12.0 * dpi) as i32)
             .clamp(p.x + 8, p.x + m.size().width as i32 - width as i32 - 8);
@@ -158,6 +159,8 @@ fn publish(
     };
     let window = selection_window()?;
     *CURRENT.lock().unwrap() = Some(payload.clone());
+    RESULT_PINNED.store(false, Ordering::SeqCst);
+    window.set_always_on_top(!result).map_err(|e| e.to_string())?;
     position_window(&window, x, y, result);
     set_badge_activation(&window, !result);
     let _ = window.emit("selection_changed", &payload);
@@ -199,6 +202,7 @@ pub async fn selection_open(id: u64) -> Result<(), String> {
     // would move focus away from the document before UIA/clipboard capture.
     let window = selection_window()?;
     set_badge_activation(&window, true);
+    window.set_always_on_top(true).map_err(|e| e.to_string())?;
     position_window(&window, payload.x, payload.y, true);
     let _ = window.emit("selection_changed", &payload);
     show_selection_window(&window, false)?;
@@ -234,6 +238,7 @@ pub async fn selection_open(id: u64) -> Result<(), String> {
     drop(state);
     let window = selection_window()?;
     set_badge_activation(&window, false);
+    window.set_always_on_top(RESULT_PINNED.load(Ordering::SeqCst)).map_err(|e| e.to_string())?;
     position_window(&window, payload.x, payload.y, true);
     let _ = window.emit("selection_changed", payload);
     let _ = window.show();
@@ -242,7 +247,20 @@ pub async fn selection_open(id: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn selection_set_pinned(id: u64, pinned: bool) -> Result<(), String> {
+    let state = CURRENT.lock().unwrap();
+    if !state.as_ref().is_some_and(|s| s.id == id && s.mode != "badge") {
+        return Err("划词窗口已变化，请重新操作。".into());
+    }
+    let window = selection_window()?;
+    window.set_always_on_top(pinned).map_err(|e| e.to_string())?;
+    RESULT_PINNED.store(pinned, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn selection_dismiss() {
+    RESULT_PINNED.store(false, Ordering::SeqCst);
     *CURRENT.lock().unwrap() = None;
     if let Some(window) = APP.get().unwrap().get_window("selection_translate") {
         let _ = window.emit("selection_changed", Option::<Selection>::None);
@@ -853,7 +871,7 @@ mod platform {
                     polling_gestures = GestureTracker::default();
                     continue;
                 }
-                if own_window(event.source) || over_popup(event.point) {
+                if RESULT_PINNED.load(Ordering::SeqCst) || own_window(event.source) || over_popup(event.point) {
                     gestures = GestureTracker::default();
                     polling_gestures = GestureTracker::default();
                     continue;

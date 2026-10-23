@@ -1,316 +1,140 @@
-import { readTextFile, BaseDirectory } from '@tauri-apps/api/fs';
-import { DropdownTrigger } from '@nextui-org/react';
-import { useDisclosure } from '@nextui-org/react';
-import toast, { Toaster } from 'react-hot-toast';
-import { DropdownMenu } from '@nextui-org/react';
-import { DropdownItem } from '@nextui-org/react';
-import { useTranslation } from 'react-i18next';
-import { CardBody } from '@nextui-org/react';
-import { Dropdown } from '@nextui-org/react';
-import { warn } from 'tauri-plugin-log-api';
-import { Button } from '@nextui-org/react';
-import { Input } from '@nextui-org/react';
-import { Card } from '@nextui-org/react';
-import { Avatar, Tooltip } from '@nextui-org/react';
 import React, { useEffect, useState } from 'react';
-
+import {
+    Button,
+    Card,
+    CardBody,
+    Dropdown,
+    DropdownTrigger,
+    DropdownMenu,
+    DropdownItem,
+    Input,
+    useDisclosure,
+} from '@nextui-org/react';
+import toast, { Toaster } from 'react-hot-toast';
 import { useConfig, useToastStyle } from '../../../../hooks';
 import { osType } from '../../../../utils/env';
+import { store } from '../../../../utils/store';
 import * as webdav from './utils/webdav';
-import WebDavModal from './WebDavModal';
-import AliyunModal from './AliyunModal';
 import * as local from './utils/local';
-import * as aliyun from './utils/aliyun';
+import WebDavModal from './WebDavModal';
+import QuarkSync from './QuarkSync';
 
-let refreshTimer = null;
-
+const labels = { quark: '夸克网盘', webdav: 'WebDAV', local: '本地备份' };
 export default function Backup() {
-    const [backupType, setBackupType] = useConfig('backup_type', 'webdav');
-    const [davUserName, setDavUserName] = useConfig('webdav_username', '');
-    const [davPassword, setDavPassword] = useConfig('webdav_password', '');
-    const [davUrl, setDavUrl] = useConfig('webdav_url', '');
-    const [aliyunQrCodeUrl, setAliyunQrCodeUrl] = useState('');
-    const [aliyunUserInfo, setAliyunUserInfo] = useState(null);
-    const [aliyunAccessToken, setAliyunAccessToken] = useConfig('aliyun_access_token', '');
-    // const [aliyunRefreshToken, setAliyunRefreshToken] = useConfig('aliyun_refresh_token', '');
-    const {
-        isOpen: isWebDavListOpen,
-        onOpen: onWebDavListOpen,
-        onOpenChange: onWebDavListOpenChange,
-    } = useDisclosure();
-    const {
-        isOpen: isAliyunListOpen,
-        onOpen: onAliyunListOpen,
-        onOpenChange: onAliyunListOpenChange,
-    } = useDisclosure();
-    const [uploading, setUploading] = useState(false);
-    const toastStyle = useToastStyle();
-    const { t } = useTranslation();
-
-    const onBackup = async () => {
-        setUploading(true);
-        const time = new Date();
-        const fileName = `${osType}-${time.getFullYear()}-${
-            time.getMonth() + 1
-        }-${time.getDate()}-${time.getHours()}-${time.getMinutes()}-${time.getSeconds()}`;
-
-        let result;
-        switch (backupType) {
-            case 'webdav':
-                result = webdav.backup(davUrl, davUserName, davPassword, fileName + '.zip');
-                break;
-            case 'local':
-                result = local.backup(fileName);
-                break;
-            case 'aliyun':
-                if (aliyunAccessToken === '') {
-                    toast.error(t('config.backup.aliyun_login_first'), { style: toastStyle });
-                    setUploading(false);
-                } else {
-                    result = aliyun.backup(aliyunAccessToken, fileName + '.zip');
-                }
-                break;
-            default:
-                warn('Unknown backup type');
-                return;
-        }
-        result.then(
-            () => {
-                toast.success(t('config.backup.backup_success'), { style: toastStyle });
-                setUploading(false);
-            },
-            (e) => {
-                toast.error(e.toString(), { style: toastStyle });
-                setUploading(false);
-            }
-        );
-    };
-
-    const onBackupListOpen = () => {
-        switch (backupType) {
-            case 'webdav':
-                onWebDavListOpen();
-                break;
-            case 'local':
-                local.get().then(
-                    () => {
-                        toast.success(t('config.backup.load_success'), { style: toastStyle });
-                    },
-                    (e) => {
-                        toast.error(e.toString(), { style: toastStyle });
-                    }
-                );
-                break;
-            case 'aliyun':
-                if (aliyunAccessToken === '') {
-                    toast.error(t('config.backup.aliyun_login_first'), { style: toastStyle });
-                } else {
-                    onAliyunListOpen();
-                }
-
-                break;
-            default:
-                warn('Unknown backup type');
-        }
-    };
-
-    const pollingStatus = async (sid) => {
-        refreshTimer = setInterval(async () => {
-            try {
-                const { status, code } = await aliyun.status(sid);
-                switch (status) {
-                    case 'QRCodeExpired': {
-                        refreshQrCode();
-                        break;
-                    }
-                    case 'LoginSuccess': {
-                        clearInterval(refreshTimer);
-                        toast.success(t('config.backup.login_success'), { style: toastStyle });
-                        const token = await aliyun.accessToken(code);
-                        setAliyunAccessToken(token);
-                        await refreshUserInfo(token);
-                        break;
-                    }
-                }
-            } catch (e) {
-                toast.error(e.toString(), { style: toastStyle });
-                refreshQrCode();
-            }
-        }, 2000);
-    };
-
-    const refreshQrCode = async () => {
-        try {
-            const { url, sid } = await aliyun.qrcode();
-            setAliyunQrCodeUrl(url);
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
-            }
-            pollingStatus(sid);
-        } catch (e) {
-            setAliyunQrCodeUrl('');
-            toast.error(e.toString(), { style: toastStyle });
-        }
-    };
-
-    const refreshUserInfo = async (token) => {
-        try {
-            const info = await aliyun.userInfo(token);
-            setAliyunQrCodeUrl('');
-            setAliyunUserInfo(info);
-        } catch (e) {
-            toast.error(e.toString(), { style: toastStyle });
-            setAliyunAccessToken('');
-            refreshQrCode();
-        }
-    };
-
+    const [backupType, setBackupType] = useConfig('backup_type', 'quark');
+    const [url, setUrl] = useConfig('webdav_url', '');
+    const [username, setUsername] = useConfig('webdav_username', '');
+    const [password, setPassword] = useConfig('webdav_password', '');
+    const [busy, setBusy] = useState(false);
+    const list = useDisclosure();
+    const style = useToastStyle();
+    const selected = labels[backupType] ? backupType : 'quark';
     useEffect(() => {
-        if (backupType === null || backupType !== 'aliyun') return;
-        if (aliyunAccessToken === '') {
-            refreshQrCode();
-        } else {
-            refreshUserInfo(aliyunAccessToken);
-        }
-
-        return () => {
-            clearInterval(refreshTimer);
-        };
+        if (backupType !== null && !labels[backupType]) setBackupType('quark');
     }, [backupType]);
-
+    const run = async (action, message) => {
+        setBusy(true);
+        try {
+            await action();
+            toast.success(message, { style });
+        } catch (e) {
+            toast.error(String(e), { style });
+        } finally {
+            setBusy(false);
+        }
+    };
     return (
         <Card className='mb-[10px]'>
             <Toaster />
-            <CardBody>
+            <CardBody className='gap-4'>
                 <div className='config-item'>
-                    <h3 className='my-auto'>{t('config.backup.type')}</h3>
-                    {backupType !== null && (
-                        <Dropdown>
-                            <DropdownTrigger>
-                                <Button variant='bordered'>{t(`config.backup.${backupType}`)}</Button>
-                            </DropdownTrigger>
-                            <DropdownMenu
-                                aria-label='backup type'
-                                onAction={(key) => {
-                                    setBackupType(key);
+                    <h3 className='my-auto'>备份方式</h3>
+                    <Dropdown>
+                        <DropdownTrigger>
+                            <Button
+                                variant='bordered'
+                                isDisabled={busy}
+                            >
+                                {labels[selected]}
+                            </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                            aria-label='备份方式'
+                            onAction={(key) => setBackupType(String(key))}
+                        >
+                            {Object.entries(labels).map(([key, label]) => (
+                                <DropdownItem key={key}>{label}</DropdownItem>
+                            ))}
+                        </DropdownMenu>
+                    </Dropdown>
+                </div>
+                {selected === 'quark' ? (
+                    <QuarkSync />
+                ) : (
+                    <>
+                        {selected === 'webdav' && (
+                            <div className='space-y-3'>
+                                <Input
+                                    label='WebDAV 地址'
+                                    variant='bordered'
+                                    value={url || ''}
+                                    onValueChange={setUrl}
+                                    isDisabled={busy}
+                                />
+                                <Input
+                                    label='用户名'
+                                    variant='bordered'
+                                    value={username || ''}
+                                    onValueChange={setUsername}
+                                    isDisabled={busy}
+                                />
+                                <Input
+                                    label='密码'
+                                    type='password'
+                                    variant='bordered'
+                                    value={password || ''}
+                                    onValueChange={setPassword}
+                                    isDisabled={busy}
+                                />
+                            </div>
+                        )}
+                        <div className='flex justify-around'>
+                            <Button
+                                color='success'
+                                variant='flat'
+                                isLoading={busy}
+                                onPress={() =>
+                                    run(async () => {
+                                        await store.save();
+                                        const name = `${osType}-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+                                        if (selected === 'webdav') await webdav.backup(url, username, password, name);
+                                        else await local.backup(name);
+                                    }, '备份成功')
+                                }
+                            >
+                                备份
+                            </Button>
+                            <Button
+                                color='secondary'
+                                variant='flat'
+                                isDisabled={busy}
+                                onPress={() => {
+                                    if (selected === 'webdav') list.onOpen();
+                                    else run(local.get, '恢复成功，请重启应用使配置生效');
                                 }}
                             >
-                                <DropdownItem key='webdav'>{t('config.backup.webdav')}</DropdownItem>
-                                <DropdownItem key='aliyun'>{t('config.backup.aliyun')}</DropdownItem>
-                                <DropdownItem key='local'>{t('config.backup.local')}</DropdownItem>
-                            </DropdownMenu>
-                        </Dropdown>
-                    )}
-                </div>
-                <div className={backupType !== 'webdav' ? 'hidden' : ''}>
-                    <div className='config-item'>
-                        <h3 className='my-auto'>{t('config.backup.webdav_url')}</h3>
-                        {davUrl !== null && (
-                            <Input
-                                variant='bordered'
-                                value={davUrl}
-                                label={t('config.backup.webdav_url')}
-                                onValueChange={(v) => {
-                                    setDavUrl(v);
-                                }}
-                                className='max-w-[300px]'
-                            />
-                        )}
-                    </div>
-                    <div className='config-item'>
-                        <h3 className='my-auto'>{t('config.backup.username')}</h3>
-                        {davUserName !== null && (
-                            <Input
-                                variant='bordered'
-                                value={davUserName}
-                                label={t('config.backup.username')}
-                                onValueChange={(v) => {
-                                    setDavUserName(v);
-                                }}
-                                className='max-w-[300px]'
-                            />
-                        )}
-                    </div>
-                    <div className='config-item'>
-                        <h3 className='my-auto'>{t('config.backup.password')}</h3>
-                        {davPassword !== null && (
-                            <Input
-                                type='password'
-                                variant='bordered'
-                                value={davPassword}
-                                label={t('config.backup.password')}
-                                onValueChange={(v) => {
-                                    setDavPassword(v);
-                                }}
-                                className='max-w-[300px]'
-                            />
-                        )}
-                    </div>
-                </div>
-                <div className={`flex justify-center ${backupType !== 'aliyun' ? 'hidden' : ''}`}>
-                    <img
-                        src={aliyunQrCodeUrl}
-                        className={`h-[200px] mb-2 ${aliyunQrCodeUrl === '' ? 'hidden' : ''}`}
-                    />
-                </div>
-                <div className={`config-item ${backupType !== 'aliyun' ? 'hidden' : ''}`}>
-                    {aliyunUserInfo !== null && (
-                        <>
-                            <h3 className='my-auto'>{t('config.backup.username')}</h3>
-
-                            <Tooltip
-                                content={t('config.backup.logout')}
-                                placement='bottom-end'
-                            >
-                                <Button
-                                    variant='light'
-                                    onClick={() => {
-                                        setAliyunAccessToken('');
-                                        // setAliyunRefreshToken('');
-                                        setAliyunUserInfo(null);
-                                        refreshQrCode();
-                                    }}
-                                >
-                                    <Avatar
-                                        src={aliyunUserInfo.avatar}
-                                        size='sm'
-                                    />
-                                    <h3 className='my-auto'>{aliyunUserInfo.name}</h3>
-                                </Button>
-                            </Tooltip>
-                        </>
-                    )}
-                </div>
-                <div className='flex justify-around'>
-                    <Button
-                        color='success'
-                        variant='flat'
-                        isLoading={uploading}
-                        onPress={onBackup}
-                    >
-                        {t('config.backup.backup')}
-                    </Button>
-                    <Button
-                        color='secondary'
-                        variant='flat'
-                        onPress={onBackupListOpen}
-                    >
-                        {t('config.backup.restore')}
-                    </Button>
-                </div>
+                                恢复备份
+                            </Button>
+                        </div>
+                    </>
+                )}
             </CardBody>
             <WebDavModal
-                isOpen={isWebDavListOpen}
-                onOpenChange={onWebDavListOpenChange}
-                url={davUrl}
-                username={davUserName}
-                password={davPassword}
-            />
-            <AliyunModal
-                isOpen={isAliyunListOpen}
-                onOpenChange={onAliyunListOpenChange}
-                accessToken={aliyunAccessToken}
-                // refreshToken={aliyunRefreshToken}
+                isOpen={list.isOpen}
+                onOpenChange={list.onOpenChange}
+                url={url}
+                username={username}
+                password={password}
             />
         </Card>
     );

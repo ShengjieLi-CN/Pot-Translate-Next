@@ -1,4 +1,4 @@
-param([string]$Version = '3.2.1')
+param([string]$Version = '3.2.2')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $bundleDir = Join-Path $repoRoot 'pot-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi'

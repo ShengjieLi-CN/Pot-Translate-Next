@@ -8,6 +8,8 @@ import { initStore } from './utils/store';
 import { initEnv } from './utils/env';
 import App from './App';
 
+document.documentElement.dataset.windowLabel = appWindow.label;
+
 if (import.meta.env.PROD) {
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();

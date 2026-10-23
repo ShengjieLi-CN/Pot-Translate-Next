@@ -1,8 +1,20 @@
 {
-    "build": { "beforeBuildCommand": "node node_modules/vite/bin/vite.js build" },
-    "package": { "productName": "Pot Translate Next" },
+    "build": {
+        "beforeBuildCommand": "node node_modules/vite/bin/vite.js build"
+    },
+    "package": {
+        "productName": "Pot Translate Next"
+    },
     "tauri": {
-        "bundle": { "active": false, "identifier": "com.shengjieli.pot-translate-next" },
-        "updater": { "endpoints": [] }
+        "bundle": {
+            "active": false,
+            "identifier": "com.shengjieli.pot-translate-next"
+        },
+        "updater": {
+            "active": false,
+            "dialog": false,
+            "endpoints": [],
+            "pubkey": ""
+        }
     }
 }

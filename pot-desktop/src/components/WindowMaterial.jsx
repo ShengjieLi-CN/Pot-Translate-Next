@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { useTheme } from 'next-themes';
 import { useConfig } from '../hooks';
 
-const windows = ['config', 'translate', 'recognize', 'updater', 'selection_translate', 'image_translate'];
+const windows = ['config', 'translate', 'recognize', 'updater', 'image_translate'];
 
 export default function WindowMaterial() {
     const [material] = useConfig('window_material', 'none');

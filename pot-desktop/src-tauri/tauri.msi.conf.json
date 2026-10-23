@@ -8,16 +8,22 @@
     "tauri": {
         "bundle": {
             "identifier": "com.shengjieli.pot-translate-next",
-            "targets": ["msi"],
+            "targets": [
+                "msi"
+            ],
             "windows": {
                 "wix": {
-                    "language": ["zh-CN"]
+                    "language": [
+                        "zh-CN"
+                    ]
                 }
             }
         },
         "updater": {
-            "active": true,
-            "endpoints": []
+            "active": false,
+            "dialog": false,
+            "endpoints": [],
+            "pubkey": ""
         }
     }
 }

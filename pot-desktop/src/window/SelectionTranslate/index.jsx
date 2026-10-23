@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { store } from '../../utils/store';
 import { selectionBlocks, selectionTextStyle } from '../../utils/selection_translation.mjs';
 import { loadSelectionTranslators, translateSelection } from '../../services/selection_translation';
+import { RiPushpinLine, RiPushpinFill } from 'react-icons/ri';
 import './style.css';
 
 export default function SelectionTranslate() {
@@ -18,6 +19,8 @@ export default function SelectionTranslate() {
     const [retry, setRetry] = useState(0);
     const [copied, setCopied] = useState(false);
     const [opening, setOpening] = useState(false);
+    const [pinned, setPinned] = useState(false);
+    const [pinBusy, setPinBusy] = useState(false);
     const current = useRef(0);
     const selectedId = useRef(null);
 
@@ -27,6 +30,7 @@ export default function SelectionTranslate() {
         const accept = (value) => {
             if (!disposed) {
                 current.current++;
+                if (selectedId.current !== (value?.id ?? null)) setPinned(false);
                 selectedId.current = value?.id ?? null;
                 setSelection(value);
                 setBlocks([]);
@@ -146,6 +150,24 @@ export default function SelectionTranslate() {
                 >
                     {L('划词翻译', 'Selection translation')}
                 </div>
+                <button
+                    aria-label={pinned ? '取消窗口置顶' : '窗口置顶'}
+                    title={pinned ? '取消窗口置顶' : '窗口置顶'}
+                    aria-pressed={pinned}
+                    disabled={pinBusy}
+                    onClick={async () => {
+                        const id = selection.id;
+                        setPinBusy(true);
+                        try {
+                            await invoke('selection_set_pinned', { id, pinned: !pinned });
+                            if (selectedId.current === id) setPinned(!pinned);
+                        } catch (e) {
+                            if (selectedId.current === id) setError(String(e));
+                        } finally { setPinBusy(false); }
+                    }}
+                >
+                    {pinned ? <RiPushpinFill aria-hidden size={16} /> : <RiPushpinLine aria-hidden size={16} />}
+                </button>
                 <button
                     aria-label={L('复制译文', 'Copy translation')}
                     disabled={selection.mode !== 'result' || status !== 'done'}

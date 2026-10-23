@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backup;
+mod quark;
 mod clipboard;
 mod cmd;
 mod config;
@@ -147,6 +148,7 @@ fn main() {
             selection_translate::selection_payload,
             selection_translate::selection_open,
             selection_translate::selection_dismiss,
+            selection_translate::selection_set_pinned,
             selection_translate::selection_status,
             selection_translate::selection_set_enabled,
             live_audio::live_audio_start,
@@ -167,13 +169,14 @@ fn main() {
             register_shortcut_by_frontend,
             update_tray,
             updater_window,
+            updater::latest_release,
+            quark::quark_drive,
             screenshot,
             lang_detect,
             webdav,
             local,
             install_plugin,
-            font_list,
-            aliyun
+            font_list
         ])
         .on_system_tray_event(tray_event_handler)
         .on_window_event(|event| {

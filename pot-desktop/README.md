@@ -2,7 +2,7 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.2.1 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.2.1)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.2.2 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.2.2)
 
 ## 功能演示
 
@@ -22,14 +22,17 @@
 
 ### 划词翻译
 
-选中文字后点击附近的“译”按钮，浮窗仅显示译文，保留段落并合并 PDF 排版断行。
+选中文字后点击附近的圆形“译”按钮，浮窗仅显示译文，保留段落并合并 PDF 排版断行；支持置顶，切换应用后仍可查看。
 
-![划词翻译演示](asset/selection-translation-preview.png)
+![划词翻译演示](asset/selection-pinned-preview.png)
+
+![圆形划词按钮演示](asset/selection-badge-preview.png)
 
 ## 其他功能
 
 - 同声传译：系统声音或麦克风、自定义 STT、千问接口模板、模型测试、说话人标签和字幕导出。
 - LibreTranslate 离线中英互译：首次从“服务设置”下载环境及模型，之后可离线使用。
+- 云端备份：通过自建 OpenList 同步至夸克网盘，也支持 WebDAV 和本地备份。
 - 四种背景材质：无、Mica、Acrylic、Apple Liquid Glass 风格模拟；支持窗口置顶。
 
 ## 开始使用

@@ -8,6 +8,7 @@ import { BsGithub } from 'react-icons/bs';
 import { invoke } from '@tauri-apps/api';
 import React from 'react';
 
+import { repositoryUrl } from '../../../../utils/project.mjs';
 import { appVersion } from '../../../../utils/env';
 
 export default function About() {
@@ -21,7 +22,7 @@ export default function About() {
                 draggable={false}
             />
             <div className='content-center'>
-                <h1 className='font-bold text-2xl text-center'>Pot</h1>
+                <h1 className='font-bold text-2xl text-center'>Pot Translate Next</h1>
                 <p className='text-center text-sm text-gray-500 mb-[5px]'>{appVersion}</p>
                 <Divider />
                 <div className='flex justify-between'>
@@ -30,7 +31,7 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={() => {
-                            open('https://pot-app.com');
+                            open(repositoryUrl);
                         }}
                     >
                         {t('config.about.website')}
@@ -40,7 +41,7 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={() => {
-                            open('https://github.com/pot-app/pot-desktop');
+                            open(repositoryUrl);
                         }}
                     >
                         {t('config.about.github')}
@@ -65,7 +66,7 @@ export default function About() {
                                     className='my-[5px]'
                                     size='sm'
                                     onPress={() => {
-                                        open('https://github.com/pot-app/pot-desktop/issues');
+                                        open(`${repositoryUrl}/issues`);
                                     }}
                                 >
                                     {t('config.about.issue')}
@@ -145,7 +146,7 @@ export default function About() {
                                         className='my-[5px]'
                                         size='lg'
                                         onPress={() => {
-                                            open('https://github.com/pot-app/pot-desktop/discussions');
+                                            open(`${repositoryUrl}/discussions`);
                                         }}
                                     >
                                         <BsGithub />
