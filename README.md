@@ -11,8 +11,9 @@
 ### 截图原位翻译
 
 快捷键或托盘启动，框选后直接在原位置显示译文。支持复杂图文、小字号英文、局部背景保留、原图对照和复制。
+<img width="1853" height="1246" alt="C__Users_ShengjieLi_AppData_Local_ElegantClipboard_images_0d86e8fb5a0027aeeaa589b7b7b0585f" src="https://github.com/user-attachments/assets/b284b6cc-0bc3-4352-93cc-39c31e81ee66" />
+<img width="1828" height="1271" alt="C__Users_ShengjieLi_AppData_Local_ElegantClipboard_images_abef5e2c52b795d098dcd3a3e43e04bd" src="https://github.com/user-attachments/assets/c54f7cb6-555d-4f96-aa83-8dab48d566d8" />
 
-![复杂图文截图翻译演示](pot-desktop/asset/complex-screenshot-preview.png)
 
 ### 自动输入翻译
 
