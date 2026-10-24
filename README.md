@@ -1,4 +1,4 @@
-# Pot Translate Next
+# Pot Translate Next (For Windows)
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
