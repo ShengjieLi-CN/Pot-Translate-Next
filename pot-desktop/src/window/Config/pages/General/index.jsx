@@ -32,6 +32,7 @@ export default function General() {
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
     const [appFontSize, setAppFontSize] = useConfig('app_font_size', 16);
     const [windowMaterial, setWindowMaterial] = useConfig('window_material', 'none');
+    const [selectionOpacity, setSelectionOpacity] = useConfig('selection_window_opacity', 100);
     const [devMode, setDevMode] = useConfig('dev_mode', false);
     const [trayClickEvent, setTrayClickEvent] = useConfig('tray_click_event', 'config');
     const [proxyEnable, setProxyEnable] = useConfig('proxy_enable', false);
@@ -328,6 +329,18 @@ export default function General() {
                             <option value='acrylic'>Acrylic（模糊透明毛玻璃）</option>
                             <option value='liquid'>Apple Liquid Glass（仿玻璃风格）</option>
                         </select>
+                    </div>
+                    <div className='config-item'>
+                        <div>
+                            <h3>划词翻译窗口背景不透明度</h3>
+                            <p className='text-xs text-default-500 mt-1'>仅调整划词译文浮窗背景，文字保持清晰。</p>
+                        </div>
+                        <div className='flex items-center gap-3'>
+                            <input aria-label='划词翻译窗口背景不透明度' type='range' min='35' max='100'
+                                disabled={selectionOpacity === null} value={Math.max(35, Math.min(100, selectionOpacity ?? 100))}
+                                onChange={(event) => setSelectionOpacity(Number(event.target.value))} />
+                            <output className='text-sm w-10 text-right'>{Math.max(35, Math.min(100, selectionOpacity ?? 100))}%</output>
+                        </div>
                     </div>
                     <div className='config-item'>
                         <h3>{t('config.general.dev_mode')}</h3>

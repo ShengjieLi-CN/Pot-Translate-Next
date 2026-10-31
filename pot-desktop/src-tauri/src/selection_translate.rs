@@ -123,8 +123,8 @@ fn position_window(window: &tauri::Window, x: i32, y: i32, result: bool) {
     });
     if let Some(m) = monitor {
         let dpi = m.scale_factor();
-        let width = ((if result { 520.0 } else { 40.0 }) * dpi).min(m.size().width as f64 - 24.0);
-        let height = ((if result { 360.0 } else { 40.0 }) * dpi).min(m.size().height as f64 - 64.0);
+        let width = ((if result { 360.0 } else { 40.0 }) * dpi).min(m.size().width as f64 - 24.0);
+        let height = ((if result { 140.0 } else { 40.0 }) * dpi).min(m.size().height as f64 - 64.0);
         let p = m.position();
         let left = (x + (12.0 * dpi) as i32)
             .clamp(p.x + 8, p.x + m.size().width as i32 - width as i32 - 8);
@@ -244,6 +244,29 @@ pub async fn selection_open(id: u64) -> Result<(), String> {
     let _ = window.show();
     let _ = window.set_focus();
     Ok(())
+}
+
+#[tauri::command]
+pub fn selection_resize(id: u64, width: f64, height: f64) -> Result<(f64, f64), String> {
+    let state = CURRENT.lock().unwrap();
+    if !state.as_ref().is_some_and(|s| s.id == id && s.mode != "badge") {
+        return Err("划词窗口已变化。".into());
+    }
+    if !width.is_finite() || !height.is_finite() { return Err("无效的窗口尺寸。".into()); }
+    let window = selection_window()?;
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .ok_or("无法读取显示器尺寸。")?;
+    let dpi = monitor.scale_factor();
+    let size = monitor.size();
+    let w = (width.clamp(200.0, 560.0) * dpi).min((size.width as f64 - 32.0 * dpi).max(40.0));
+    let h = (height.max(110.0) * dpi).min((size.height as f64 - 96.0 * dpi).max(40.0));
+    let pos = window.outer_position().map_err(|e| e.to_string())?;
+    let origin = monitor.position();
+    let x = pos.x.max(origin.x + 8).min((origin.x + size.width as i32 - w.ceil() as i32 - 8).max(origin.x));
+    let y = pos.y.max(origin.y + 8).min((origin.y + size.height as i32 - h.ceil() as i32 - 64).max(origin.y));
+    window.set_size(tauri::PhysicalSize::new(w, h)).map_err(|e| e.to_string())?;
+    window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+    Ok((w / dpi, h / dpi))
 }
 
 #[tauri::command]

@@ -217,7 +217,7 @@ export default function SourceArea(props) {
             return;
         }
         if (!canTranslate || composing) return;
-        sourceTextChangeTimer.current = setTimeout(() => submitTextRef.current(), 600);
+        sourceTextChangeTimer.current = setTimeout(() => submitTextRef.current(), 100);
         return () => clearTimeout(sourceTextChangeTimer.current);
     }, [sourceText, embedded, canTranslate, composing]);
 

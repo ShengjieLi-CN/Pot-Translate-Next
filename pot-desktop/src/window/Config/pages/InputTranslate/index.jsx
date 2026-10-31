@@ -114,7 +114,6 @@ function InputTranslateContent() {
             >
                 <LanguageArea />
             </SourceArea>
-            <p className='text-xs text-default-500 px-1'>{t('config.input.hint')}</p>
             {enabledServices.length > 0 ? (
                 <TargetArea
                     embedded

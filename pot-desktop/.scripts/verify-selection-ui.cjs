@@ -49,6 +49,8 @@ async function fixture(page, options = {}) {
             window.__TAURI_IPC__ = async (request) => {
                 const done = (value) => window[`_${request.callback}`]?.(value);
                 const fail = (value) => window[`_${request.error}`]?.(value);
+                if (request.cmd === 'plugin:store|get' && request.key === 'selection_window_opacity' && options.opacity) return done(options.opacity);
+                if (request.cmd === 'plugin:store|save') state.saved = true;
                 if (request.cmd === 'selection_payload') return done(state.payload);
                 if (request.cmd === 'selection_open') {
                     await window.__setSelection({ ...state.payload, mode: 'capturing' });
@@ -60,6 +62,10 @@ async function fixture(page, options = {}) {
                         captureError: state.captureFail ? '未读取到选中文字。请重新划词。' : null,
                     });
                     return done(null);
+                }
+                if (request.cmd === 'selection_resize') {
+                    (state.sizes ||= []).push({ width: request.width, height: request.height });
+                    return done([request.width, request.height]);
                 }
                 if (request.cmd === 'selection_set_pinned') {
                     state.pinned = request.pinned;
@@ -172,6 +178,12 @@ async function fixture(page, options = {}) {
             'normal'
         );
         assert.doesNotMatch(await page.locator('body').innerText(), /The geome|Second source|Results/);
+        assert.equal(await page.getByRole('combobox', { name: '当前翻译服务' }).inputValue(), 'openai@test');
+        assert.equal(await page.getByRole('slider').count(), 0);
+        await page.waitForFunction(() => window.__selectionFixture.sizes?.length > 0);
+        const initialSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
+        assert.ok(initialSize.width >= 340 && initialSize.width <= 560);
+        assert.ok(initialSize.height < 360, JSON.stringify(initialSize));
         const requests = await page.evaluate(() => window.__selectionFixture.requests);
         assert.equal(requests.length, 3);
         assert.match(
@@ -179,6 +191,11 @@ async function fixture(page, options = {}) {
             /geometrical RNA structure is predicted\. Another sentence follows\./
         );
         assert.match(requests[0].body.payload.messages[0].content, /untrusted data/);
+        await page.getByRole('combobox', {name: '当前翻译服务'}).selectOption('openai@second');
+        await page.waitForFunction(() => window.__selectionFixture.requests.length === 6 && !document.querySelector('button[aria-label="复制译文"]').disabled);
+        await page.waitForFunction(() => window.__selectionFixture.settings.selection_translate_service === 'openai@second');
+        assert.equal(await page.getByRole('combobox', {name: '当前翻译服务'}).inputValue(), 'openai@second');
+
         await page.getByRole('button', { name: '窗口置顶', exact: true }).click();
         assert.equal(await page.getByRole('button', { name: '取消窗口置顶' }).getAttribute('aria-pressed'), 'true');
         assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), true);
@@ -190,7 +207,7 @@ async function fixture(page, options = {}) {
             await page.evaluate(() => window.__fixture.clipboard),
             '结果\n\n预测 RNA 的几何结构。 后面还有一句话。\n\n第二段译文。'
         );
-        await page.screenshot({ path: path.resolve('asset/selection-translation-preview.png') });
+        await page.screenshot({ path: path.resolve('../.work/selection324-preview.png') });
 
         await page.evaluate(async () => {
             window.__selectionFixture.fail = true;
@@ -217,12 +234,28 @@ async function fixture(page, options = {}) {
         await page.evaluate(() => window.__selectionFixture.releases[0]());
         await page.waitForTimeout(100);
         assert.equal(await page.locator('.selection-translations').innerText(), '新的译文。');
+        await page.waitForTimeout(200);
+        const shortSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
+        await page.evaluate(async () => {
+            window.__selectionFixture.sourceRuns = [];
+            await window.__setSelection({ id: 44, mode: 'result', runs: [{text: Array.from({length: 18}, (_, i) => 'replacement source ' + i).join('\n\n')}] });
+        });
+        await page.waitForFunction(() => document.querySelectorAll('.selection-paragraph').length === 18);
+        await page.waitForTimeout(250);
+        const longSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
+        assert.ok(longSize.height > shortSize.height, JSON.stringify({shortSize,longSize}));
         await page.setViewportSize({ width: 320, height: 240 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         await page.getByRole('button', { name: '关闭划词翻译' }).click();
         await page.waitForFunction(() => !document.querySelector('.selection-result-window'));
         assert.deepEqual(errors, []);
 
+        const remembered = await context.newPage();
+        await fixture(remembered, { result: true, opacity: 60 });
+        await remembered.goto(url);
+        await remembered.waitForFunction(() => document.querySelector('.selection-result-window')?.style.getPropertyValue('--selection-opacity') === '0.6');
+        assert.match(await remembered.locator('.selection-result-window').evaluate(n => getComputedStyle(n).backgroundColor), /0\.6\)$/);
+        await remembered.close();
         const empty = await context.newPage();
         await fixture(empty, { result: true, noService: true });
         await empty.goto(url);
@@ -286,6 +319,18 @@ async function fixture(page, options = {}) {
             window.__selectionFixture.listening = false;
         });
         await settings.getByRole('alert').filter({ hasText: '监听尚未就绪' }).waitFor();
+        await settings.goto(`${url}/general`);
+        const opacity = settings.getByRole('slider', {name: '划词翻译窗口背景不透明度'});
+        await opacity.waitFor();
+        const order = await settings.evaluate(() => {
+            const rows = Array.from(document.querySelectorAll('.config-item'));
+            return [rows.findIndex(n => n.textContent.includes('背景材质')), rows.findIndex(n => n.textContent.includes('划词翻译窗口背景不透明度'))];
+        });
+        assert.equal(order[1], order[0] + 1);
+        await opacity.fill('55');
+        await settings.waitForFunction(() => window.__selectionFixture.settings.selection_window_opacity === 55 && window.__selectionFixture.saved);
+        assert.equal(await settings.locator('output').last().textContent(), '55%');
+        await settings.screenshot({path: path.resolve('../.work/selection324-settings.png')});
         await settings.close();
         console.log(
             'Selection UI passed: deferred selection badge, no transmission before click, capture failure/retry, listener diagnostics, translation only, paragraphs/font styles, PDF restoration, copy, stale result isolation, dismiss and settings.'

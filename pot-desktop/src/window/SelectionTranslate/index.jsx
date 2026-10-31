@@ -4,13 +4,14 @@ import { listen } from '@tauri-apps/api/event';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { useTranslation } from 'react-i18next';
 import { store } from '../../utils/store';
+import { useConfig } from '../../hooks/useConfig';
 import { selectionBlocks, selectionTextStyle } from '../../utils/selection_translation.mjs';
 import { loadSelectionTranslators, translateSelection } from '../../services/selection_translation';
 import { RiPushpinLine, RiPushpinFill } from 'react-icons/ri';
 import './style.css';
 
 export default function SelectionTranslate() {
-    const { i18n } = useTranslation();
+    const { i18n, t } = useTranslation();
     const L = (cn, en) => (i18n.language.startsWith('zh') ? cn : en);
     const [selection, setSelection] = useState(null);
     const [blocks, setBlocks] = useState([]);
@@ -21,7 +22,42 @@ export default function SelectionTranslate() {
     const [opening, setOpening] = useState(false);
     const [pinned, setPinned] = useState(false);
     const [pinBusy, setPinBusy] = useState(false);
+    const [serviceName, setServiceName] = useState('');
+    const [opacity] = useConfig('selection_window_opacity', 100);
+    const [serviceKey, setServiceKey] = useConfig('selection_translate_service', '');
+    const [serviceOptions, setServiceOptions] = useState([]);
+    const [activeService, setActiveService] = useState('');
+    const serviceLabel = (service) => service.config?.instanceName || (service.plugin ? service.title : t(`services.${service.name}.title`, { defaultValue: service.title || service.name }));
+    const contentRef = useRef(null);
     const current = useRef(0);
+
+    useEffect(() => {
+        if (!selection || selection.mode === 'badge') return;
+        const timer = setTimeout(async () => {
+            const content = contentRef.current;
+            if (!content) return;
+            // Measure an unconstrained copy; the visible viewport can already be scrolled.
+            const copy = content.cloneNode(true);
+            const text = blocks.map((b) => b.translation).join('');
+            const width = Math.min(560, Math.max(340, 300 + Math.sqrt(text.length) * 10), Math.max(200, screen.availWidth - 32));
+            Object.assign(copy.style, { position: 'fixed', left: '-10000px', top: '0', width: `${width - 2}px`, height: 'auto', maxHeight: 'none', overflow: 'visible', boxSizing: 'border-box' });
+            document.body.appendChild(copy);
+            const height = Math.ceil(copy.getBoundingClientRect().height) + 75;
+            copy.remove();
+            try {
+                const actual = await invoke('selection_resize', { id: selection.id, width, height });
+                // Re-measure height if the monitor forced a narrower window.
+                if (actual && actual[0] < width - 1 && selectedId.current === selection.id) {
+                    copy.style.width = `${actual[0] - 2}px`;
+                    document.body.appendChild(copy);
+                    const wrappedHeight = Math.ceil(copy.getBoundingClientRect().height) + 75;
+                    copy.remove();
+                    await invoke('selection_resize', { id: selection.id, width: actual[0], height: wrappedHeight });
+                }
+            } catch { /* A dismissed or superseded selection must not resize a new badge. */ }
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [selection, blocks, status, error, serviceName]);
     const selectedId = useRef(null);
 
     useEffect(() => {
@@ -38,6 +74,7 @@ export default function SelectionTranslate() {
                 setCopied(false);
                 setOpening(false);
                 setStatus('idle');
+                setServiceName('');
             }
         };
         const unlisten = listen('selection_changed', ({ payload }) => {
@@ -71,7 +108,7 @@ export default function SelectionTranslate() {
     }, []);
 
     useEffect(() => {
-        if (selection?.mode !== 'result') return;
+        if (selection?.mode !== 'result' || serviceKey === null) return;
         const revision = ++current.current;
         const isCurrent = () => current.current === revision;
         setStatus('loading');
@@ -85,12 +122,16 @@ export default function SelectionTranslate() {
             if (!source.length) throw new Error(L('请先选中需要翻译的文字。', 'Select text to translate first.'));
             const keys = (await store.get('translate_service_list')) || ['deepl', 'bing', 'lingva', 'yandex', 'google'];
             const services = await loadSelectionTranslators(keys);
-            const key = await store.get('selection_translate_service');
-            const service = services.find((s) => s.key === key) || services[0];
+            if (!isCurrent()) return;
+            setServiceOptions(services);
+            const service = services.find((s) => s.key === serviceKey) || services[0];
             if (!service)
                 throw new Error(
                     L('请先在服务设置中启用文本翻译服务。', 'Enable a text translation service in Settings first.')
                 );
+            if (!isCurrent()) return;
+            setServiceName(serviceLabel(service));
+            setActiveService(service.key);
             const target =
                 (await store.get('selection_target_language')) ||
                 (await store.get('translate_target_language')) ||
@@ -109,7 +150,7 @@ export default function SelectionTranslate() {
         return () => {
             current.current++;
         };
-    }, [selection, retry]);
+    }, [selection, retry, serviceKey]);
 
     const dismiss = () => invoke('selection_dismiss');
     const open = async () => {
@@ -141,6 +182,7 @@ export default function SelectionTranslate() {
     return (
         <section
             className='selection-result-window'
+            style={{ '--selection-opacity': Math.max(35, Math.min(100, opacity ?? 100)) / 100 }}
             aria-label={L('划词译文', 'Selection translation')}
         >
             <header className='selection-toolbar'>
@@ -189,7 +231,18 @@ export default function SelectionTranslate() {
                     ×
                 </button>
             </header>
+            <div className='selection-options'>
+                <label className='selection-service'>翻译服务
+                    <select aria-label='当前翻译服务' title={serviceName} value={activeService}
+                        disabled={selection.mode !== 'result' || !serviceOptions.length}
+                        onChange={(event) => setServiceKey(event.target.value)}>
+                        {!serviceOptions.length && <option value=''>{selection.mode === 'capturing' ? '正在取词' : '正在加载服务'}</option>}
+                        {serviceOptions.map((service) => <option key={service.key} value={service.key}>{serviceLabel(service)}</option>)}
+                    </select>
+                </label>
+            </div>
             <main
+                ref={contentRef}
                 className='selection-content'
                 aria-busy={selection.mode === 'capturing' || status === 'loading'}
             >

@@ -149,6 +149,7 @@ fn main() {
             selection_translate::selection_open,
             selection_translate::selection_dismiss,
             selection_translate::selection_set_pinned,
+            selection_translate::selection_resize,
             selection_translate::selection_status,
             selection_translate::selection_set_enabled,
             live_audio::live_audio_start,

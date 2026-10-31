@@ -37,7 +37,7 @@ html[data-window-label='selection_translate'] body {
     flex-direction: column;
     border: 1px solid hsl(var(--nextui-default-200));
     border-radius: 10px;
-    background: hsl(var(--nextui-background));
+    background: hsl(var(--nextui-background) / var(--selection-opacity, 1));
     color: hsl(var(--nextui-foreground));
     overflow: hidden;
     box-sizing: border-box;
@@ -113,3 +113,14 @@ html[data-window-label='selection_translate'] body {
     right: 0;
     cursor: nwse-resize;
 }
+
+.selection-options { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; font-size: 12px; }
+.selection-service { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selection-opacity { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.selection-opacity input { width: 64px; accent-color: #2563eb; }
+.selection-opacity output { min-width: 31px; text-align: right; }
+.selection-content { min-height: 0; }
+
+.selection-service { display: flex; align-items: center; gap: 8px; }
+.selection-service select { flex: 1; min-width: 0; max-width: 100%; padding: 3px 6px; border-radius: 5px; background: hsl(var(--nextui-default-100)); color: inherit; cursor: pointer; }
+.selection-service select:disabled { cursor: default; }
