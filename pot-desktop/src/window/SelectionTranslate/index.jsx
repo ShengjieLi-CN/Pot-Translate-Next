@@ -7,7 +7,8 @@ import { store } from '../../utils/store';
 import { useConfig } from '../../hooks/useConfig';
 import { selectionBlocks, selectionTextStyle } from '../../utils/selection_translation.mjs';
 import { loadSelectionTranslators, translateSelection } from '../../services/selection_translation';
-import { RiPushpinLine, RiPushpinFill } from 'react-icons/ri';
+import { RiPushpinLine, RiPushpinFill, RiVolumeUpLine, RiStopFill } from 'react-icons/ri';
+import { synthesizeSelection } from '../../services/selection_speech';
 import './style.css';
 
 export default function SelectionTranslate() {
@@ -22,6 +23,10 @@ export default function SelectionTranslate() {
     const [opening, setOpening] = useState(false);
     const [pinned, setPinned] = useState(false);
     const [pinBusy, setPinBusy] = useState(false);
+    const [speechState, setSpeechState] = useState('idle');
+    const [speechError, setSpeechError] = useState('');
+    const speechRevision = useRef(0);
+    const audio = useRef(null);
     const [serviceName, setServiceName] = useState('');
     const [opacity] = useConfig('selection_window_opacity', 100);
     const [serviceKey, setServiceKey] = useConfig('selection_translate_service', '');
@@ -30,6 +35,51 @@ export default function SelectionTranslate() {
     const serviceLabel = (service) => service.config?.instanceName || (service.plugin ? service.title : t(`services.${service.name}.title`, { defaultValue: service.title || service.name }));
     const contentRef = useRef(null);
     const current = useRef(0);
+
+    const stopSpeech = () => {
+        speechRevision.current++;
+        const previous = audio.current;
+        audio.current = null;
+        if (previous) {
+            if (previous.source) { previous.source.onended = null; try { previous.source.stop(); } catch {} previous.source.disconnect(); }
+            previous.context.close().catch(() => {});
+        }
+        setSpeechState('idle');
+    };
+    useEffect(() => {
+        setSpeechError('');
+        stopSpeech();
+        return stopSpeech;
+    }, [selection?.id, selection?.mode]);
+
+    const readOriginal = async () => {
+        if (speechState !== 'idle') { stopSpeech(); return; }
+        const text = selectionBlocks(selection?.runs).map((block) => block.text).join('\n\n').trim();
+        if (!text) return;
+        const revision = ++speechRevision.current;
+        const isCurrent = () => speechRevision.current === revision;
+        setSpeechError('');
+        setSpeechState('loading');
+        try {
+            // Create/resume during the click so WebView's audio policy permits playback.
+            const context = new (window.AudioContext || window.webkitAudioContext)();
+            audio.current = { context, source: null };
+            await context.resume();
+            const data = await synthesizeSelection(text, isCurrent);
+            if (!isCurrent()) return;
+            const buffer = await context.decodeAudioData(new Uint8Array(data).buffer);
+            if (!isCurrent()) return;
+            const source = context.createBufferSource();
+            source.buffer = buffer;
+            source.connect(context.destination);
+            audio.current.source = source;
+            source.onended = () => { if (isCurrent()) stopSpeech(); };
+            setSpeechState('playing');
+            source.start();
+        } catch (error) {
+            if (isCurrent()) { stopSpeech(); setSpeechError(`原文朗读失败：${String(error)}`); }
+        }
+    };
 
     useEffect(() => {
         if (!selection || selection.mode === 'badge') return;
@@ -57,7 +107,7 @@ export default function SelectionTranslate() {
             } catch { /* A dismissed or superseded selection must not resize a new badge. */ }
         }, 100);
         return () => clearTimeout(timer);
-    }, [selection, blocks, status, error, serviceName]);
+    }, [selection, blocks, status, error, serviceName, speechError]);
     const selectedId = useRef(null);
 
     useEffect(() => {
@@ -193,6 +243,15 @@ export default function SelectionTranslate() {
                     {L('划词翻译', 'Selection translation')}
                 </div>
                 <button
+                    aria-label={speechState === 'idle' ? '朗读选中原文' : '停止朗读'}
+                    title={speechState === 'loading' ? '正在合成原文语音，点击取消' : speechState === 'playing' ? '停止朗读' : '朗读选中原文'}
+                    aria-pressed={speechState !== 'idle'}
+                    disabled={selection.mode !== 'result' || !selection.runs?.some((run) => run.text?.trim())}
+                    onClick={readOriginal}
+                >
+                    {speechState === 'loading' ? '…' : speechState === 'playing' ? <RiStopFill aria-hidden size={16} /> : <RiVolumeUpLine aria-hidden size={16} />}
+                </button>
+                <button
                     aria-label={pinned ? '取消窗口置顶' : '窗口置顶'}
                     title={pinned ? '取消窗口置顶' : '窗口置顶'}
                     aria-pressed={pinned}
@@ -275,6 +334,7 @@ export default function SelectionTranslate() {
                             );
                         })}
                 </article>
+                {speechError && <p className='selection-error' role='alert'>{speechError}</p>}
                 {error && (
                     <div className='selection-error'>
                         <p role='alert'>{error}</p>

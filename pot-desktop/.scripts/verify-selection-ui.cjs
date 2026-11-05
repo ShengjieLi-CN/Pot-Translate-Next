@@ -34,6 +34,21 @@ async function fixture(page, options = {}) {
                 captureReleases: [],
                 settings: {},
             });
+            state.speechCalls = [];
+            state.audioStarts = 0;
+            state.audioStops = 0;
+            state.speechReleases = [];
+            window.AudioContext = class {
+                destination = {};
+                resume() { return Promise.resolve(); }
+                close() { return Promise.resolve(); }
+                decodeAudioData() { return Promise.resolve({}); }
+                createBufferSource() {
+                    const source = { connect() {}, disconnect() {}, start() { state.audioStarts++; }, stop() { state.audioStops++; } };
+                    state.audioSource = source;
+                    return source;
+                }
+            };
             state.sourceRuns = state.payload.runs;
             if (options.deferred) state.payload.runs = [];
             window.__setSelection = async (payload) => {
@@ -62,6 +77,19 @@ async function fixture(page, options = {}) {
                         captureError: state.captureFail ? '未读取到选中文字。请重新划词。' : null,
                     });
                     return done(null);
+                }
+                if (request.cmd === 'plugin:store|get' && request.key === 'tts_service_list') return done(options.noTts ? [] : ['plugin.fixture.voice@test']);
+                if (request.cmd === 'plugin:store|get' && request.key === 'plugin.fixture.voice@test') return done({ apiKey: 'fixture-voice-key', enable: true });
+                if (request.cmd === 'tauri' && request.__tauriModule === 'Fs' && request.message.cmd === 'readTextFile') {
+                    const path = request.message.path;
+                    if (path.endsWith('/info.json') && path.includes('tts/')) return done(JSON.stringify({language: {en: 'en-US'}}));
+                    if (path.endsWith('/main.js') && path.includes('tts/')) return done(`async function tts(text, lang, options) {
+                        const state = window.__selectionFixture;
+                        state.speechCalls.push({text, lang, config: options.config, hasUtils: !!options.utils});
+                        if (state.holdSpeech) await new Promise(resolve => state.speechReleases.push(resolve));
+                        if (state.failSpeech) throw new Error('fixture synthesis error');
+                        return [82, 73, 70, 70];
+                    }`);
                 }
                 if (request.cmd === 'selection_resize') {
                     (state.sizes ||= []).push({ width: request.width, height: request.height });
@@ -196,6 +224,32 @@ async function fixture(page, options = {}) {
         await page.waitForFunction(() => window.__selectionFixture.settings.selection_translate_service === 'openai@second');
         assert.equal(await page.getByRole('combobox', {name: '当前翻译服务'}).inputValue(), 'openai@second');
 
+        assert.equal(await page.evaluate(() => window.__selectionFixture.speechCalls.length), 0);
+        await page.getByRole('button', {name: '朗读选中原文'}).click();
+        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 1);
+        const speech = await page.evaluate(() => window.__selectionFixture.speechCalls[0]);
+        assert.match(speech.text, /geometrical RNA structure/);
+        assert.doesNotMatch(speech.text, /预测|第二段译文/);
+        assert.equal(speech.lang, 'en-US');
+        assert.equal(speech.config.apiKey, 'fixture-voice-key');
+        assert.equal(speech.hasUtils, true);
+        await page.getByRole('button', {name: '停止朗读'}).click();
+        assert.equal(await page.evaluate(() => window.__selectionFixture.audioStops), 1);
+        await page.evaluate(() => {window.__selectionFixture.holdSpeech = true;});
+        await page.getByRole('button', {name: '朗读选中原文'}).click();
+        await page.waitForFunction(() => window.__selectionFixture.speechReleases.length === 1);
+        await page.getByRole('button', {name: '停止朗读'}).click();
+        await page.evaluate(() => {window.__selectionFixture.holdSpeech = false; window.__selectionFixture.speechReleases[0]();});
+        await page.waitForTimeout(100);
+        assert.equal(await page.evaluate(() => window.__selectionFixture.audioStarts), 1);
+        await page.evaluate(() => {window.__selectionFixture.failSpeech = true;});
+        await page.getByRole('button', {name: '朗读选中原文'}).click();
+        await page.getByRole('alert').filter({hasText: 'fixture synthesis error'}).waitFor();
+        await page.evaluate(() => {window.__selectionFixture.failSpeech = false;});
+        await page.getByRole('button', {name: '朗读选中原文'}).click();
+        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 2);
+        await page.evaluate(() => window.__selectionFixture.audioSource.onended());
+        await page.getByRole('button', {name: '朗读选中原文'}).waitFor();
         await page.getByRole('button', { name: '窗口置顶', exact: true }).click();
         assert.equal(await page.getByRole('button', { name: '取消窗口置顶' }).getAttribute('aria-pressed'), 'true');
         assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), true);
@@ -209,11 +263,16 @@ async function fixture(page, options = {}) {
         );
         await page.screenshot({ path: path.resolve('../.work/selection324-preview.png') });
 
+        await page.getByRole('button', {name: '朗读选中原文'}).click();
+        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 3);
+        const stopsBeforeSelection = await page.evaluate(() => window.__selectionFixture.audioStops);
         await page.evaluate(async () => {
             window.__selectionFixture.fail = true;
             await window.__setSelection({ id: 2, mode: 'result', runs: [{ text: 'failure source' }] });
         });
         await page.getByRole('alert').filter({ hasText: 'fixture network error' }).waitFor();
+        assert.ok(await page.evaluate(() => window.__selectionFixture.audioStops) > stopsBeforeSelection);
+        await page.getByRole('button', {name: '朗读选中原文'}).waitFor();
         assert.doesNotMatch(await page.locator('body').innerText(), /failure source/);
         await page.evaluate(() => {
             window.__selectionFixture.fail = false;
@@ -256,6 +315,12 @@ async function fixture(page, options = {}) {
         await remembered.waitForFunction(() => document.querySelector('.selection-result-window')?.style.getPropertyValue('--selection-opacity') === '0.6');
         assert.match(await remembered.locator('.selection-result-window').evaluate(n => getComputedStyle(n).backgroundColor), /0\.6\)$/);
         await remembered.close();
+        const noVoice = await context.newPage();
+        await fixture(noVoice, { result: true, noTts: true });
+        await noVoice.goto(url);
+        await noVoice.getByRole('button', {name: '朗读选中原文'}).click();
+        await noVoice.getByRole('alert').filter({hasText: '启用语音合成服务'}).waitFor();
+        await noVoice.close();
         const empty = await context.newPage();
         await fixture(empty, { result: true, noService: true });
         await empty.goto(url);
@@ -276,6 +341,7 @@ async function fixture(page, options = {}) {
         await deferred.waitForFunction(() => window.__selectionFixture.captureReleases.length === 1);
         await deferred.getByRole('status').filter({ hasText: '正在读取选中文字' }).waitFor();
         assert.equal(await deferred.getByRole('button', { name: '复制译文' }).isDisabled(), true);
+        assert.equal(await deferred.getByRole('button', { name: '朗读选中原文' }).isDisabled(), true);
         assert.doesNotMatch(await deferred.locator('body').innerText(), /The geome|Second source|Results/);
         assert.equal(await deferred.evaluate(() => window.__selectionFixture.requests.length), 0);
         await deferred.evaluate(() => {
