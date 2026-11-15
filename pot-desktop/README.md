@@ -2,7 +2,7 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.2.2 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.2.2)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.0 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.0)
 
 ## 功能演示
 
@@ -22,7 +22,7 @@
 
 ### 划词翻译
 
-选中文字后点击附近的圆形“译”按钮，浮窗仅显示译文，保留段落并合并 PDF 排版断行；支持置顶，切换应用后仍可查看。
+选中文字后点击附近的圆形“译”按钮，浮窗仅显示译文，保留段落并合并 PDF 排版断行；支持多个译文窗口独立置顶和调整尺寸，内容较多时自动扩大窗口。
 
 ![划词翻译演示](asset/selection-pinned-preview.png)
 

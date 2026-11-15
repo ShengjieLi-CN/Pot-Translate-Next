@@ -5,7 +5,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const { installMock } = require('./verify-screenshot-ui.cjs');
 
 async function fixture(page, options = {}) {
-    await installMock(page, { label: options.config ? 'config' : 'selection_translate', noService: options.noService });
+    await page.exposeFunction('__resizeSelectionWindow', async ({ width, height }) => {
+        await page.setViewportSize({width: Math.round(width), height: Math.round(height)});
+        return [width, height];
+    });
+    await installMock(page, { label: options.config ? 'config' : options.label || 'selection_translate', noService: options.noService });
     await page.addInitScript(
         ({ options }) => {
             const base = window.__TAURI_IPC__;
@@ -93,7 +97,7 @@ async function fixture(page, options = {}) {
                 }
                 if (request.cmd === 'selection_resize') {
                     (state.sizes ||= []).push({ width: request.width, height: request.height });
-                    return done([request.width, request.height]);
+                    return done(await window.__resizeSelectionWindow({width: request.width, height: request.height}));
                 }
                 if (request.cmd === 'selection_set_pinned') {
                     state.pinned = request.pinned;
@@ -145,7 +149,7 @@ async function fixture(page, options = {}) {
         headless: true,
         executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
     });
-    const context = await browser.newContext({ viewport: { width: 520, height: 360 } });
+    const context = await browser.newContext({ viewport: { width: 300, height: 400 } });
     if (process.env.UI_DIST === '1') {
         const dist = path.resolve(__dirname, '../dist');
         await context.route('http://pot-ui.invalid/**', async (route) => {
@@ -208,10 +212,14 @@ async function fixture(page, options = {}) {
         assert.doesNotMatch(await page.locator('body').innerText(), /The geome|Second source|Results/);
         assert.equal(await page.getByRole('combobox', { name: '当前翻译服务' }).inputValue(), 'openai@test');
         assert.equal(await page.getByRole('slider').count(), 0);
-        await page.waitForFunction(() => window.__selectionFixture.sizes?.length > 0);
-        const initialSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
-        assert.ok(initialSize.width >= 340 && initialSize.width <= 560);
-        assert.ok(initialSize.height < 360, JSON.stringify(initialSize));
+        await page.waitForTimeout(250);
+        const initialSize = await page.locator('.selection-result-window').boundingBox();
+        assert.equal(initialSize.width, 300);
+        assert.ok(initialSize.height >= 400 && initialSize.height <= 624);
+        for (const button of await page.locator('.selection-toolbar button').all()) {
+            const bounds = await button.boundingBox();
+            assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 300, JSON.stringify(bounds));
+        }
         const requests = await page.evaluate(() => window.__selectionFixture.requests);
         assert.equal(requests.length, 3);
         assert.match(
@@ -294,15 +302,23 @@ async function fixture(page, options = {}) {
         await page.waitForTimeout(100);
         assert.equal(await page.locator('.selection-translations').innerText(), '新的译文。');
         await page.waitForTimeout(200);
-        const shortSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
+        const shortSize = await page.locator('.selection-result-window').boundingBox();
         await page.evaluate(async () => {
             window.__selectionFixture.sourceRuns = [];
-            await window.__setSelection({ id: 44, mode: 'result', runs: [{text: Array.from({length: 18}, (_, i) => 'replacement source ' + i).join('\n\n')}] });
+            await window.__setSelection({ id: 44, mode: 'result', runs: [{text: Array.from({length: 80}, (_, i) => 'replacement source ' + i).join('\n\n')}] });
         });
-        await page.waitForFunction(() => document.querySelectorAll('.selection-paragraph').length === 18);
+        await page.waitForFunction(() => document.querySelectorAll('.selection-paragraph').length === 80);
         await page.waitForTimeout(250);
-        const longSize = await page.evaluate(() => window.__selectionFixture.sizes.at(-1));
-        assert.ok(longSize.height > shortSize.height, JSON.stringify({shortSize,longSize}));
+        const longSize = await page.locator('.selection-result-window').boundingBox();
+        assert.ok(longSize.height > shortSize.height || longSize.width > shortSize.width, JSON.stringify({shortSize,longSize}));
+        assert.ok(longSize.width <= 480 && longSize.height <= 624);
+        assert.equal(await page.locator('.selection-content').evaluate(n => n.scrollHeight > n.clientHeight), true);
+        assert.ok(await page.evaluate(() => window.__selectionFixture.sizes?.length > 0));
+        // Changes to the remembered default must not retranslate existing windows.
+        const beforeDefaultChange = await page.evaluate(() => window.__selectionFixture.requests.length);
+        await page.evaluate(() => window.__TAURI_IPC__({cmd: 'tauri', __tauriModule: 'Event', message: {cmd: 'emit', event: 'selection_translate_service_changed', payload: 'openai@test'}, callback: 0, error: 0}));
+        await page.waitForTimeout(150);
+        assert.equal(await page.evaluate(() => window.__selectionFixture.requests.length), beforeDefaultChange);
         await page.setViewportSize({ width: 320, height: 240 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
         await page.getByRole('button', { name: '关闭划词翻译' }).click();
@@ -310,10 +326,13 @@ async function fixture(page, options = {}) {
         assert.deepEqual(errors, []);
 
         const remembered = await context.newPage();
-        await fixture(remembered, { result: true, opacity: 60 });
+        await fixture(remembered, { result: true, opacity: 60, label: 'selection_translate_42' });
         await remembered.goto(url);
         await remembered.waitForFunction(() => document.querySelector('.selection-result-window')?.style.getPropertyValue('--selection-opacity') === '0.6');
         assert.match(await remembered.locator('.selection-result-window').evaluate(n => getComputedStyle(n).backgroundColor), /0\.6\)$/);
+        assert.equal(await remembered.locator('html').evaluate(n => getComputedStyle(n).backgroundColor), 'rgba(0, 0, 0, 0)');
+        await remembered.keyboard.press('Escape');
+        await remembered.waitForFunction(() => !document.querySelector('.selection-result-window'));
         await remembered.close();
         const noVoice = await context.newPage();
         await fixture(noVoice, { result: true, noTts: true });
@@ -399,7 +418,7 @@ async function fixture(page, options = {}) {
         await settings.screenshot({path: path.resolve('../.work/selection324-settings.png')});
         await settings.close();
         console.log(
-            'Selection UI passed: deferred selection badge, no transmission before click, capture failure/retry, listener diagnostics, translation only, paragraphs/font styles, PDF restoration, copy, stale result isolation, dismiss and settings.'
+            'Selection UI passed: deferred selection badge, no transmission before click, capture failure/retry, listener diagnostics, translation only, paragraphs/font styles, PDF restoration, copy, stale result isolation, default 300x400 layout, content-driven growth, bounded scrolling, dynamic window labels, per-window service choice, dismiss and settings.'
         );
     } catch (error) {
         console.error(await page.locator('body').innerText());

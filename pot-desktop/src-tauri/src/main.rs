@@ -187,10 +187,13 @@ fn main() {
             if event.window().label() == "selection_translate" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
                     api.prevent_close();
-                    selection_translate::selection_dismiss();
+                    selection_translate::dismiss_badge(None);
                 }
             }
-            if matches!(event.event(), tauri::WindowEvent::Destroyed) { live_audio::stop_for_window(event.window().label()); }
+            if matches!(event.event(), tauri::WindowEvent::Destroyed) {
+                live_audio::stop_for_window(event.window().label());
+                selection_translate::forget_result(event.window().label());
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

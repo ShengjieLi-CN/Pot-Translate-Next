@@ -395,3 +395,41 @@ test('Paddle screenshot adapter retains original quadrilateral positions and rep
     assert.throws(() => paddleScreenshotLayout('{"code":200,"data":"Missing image"}', 100, 100), /Missing image/);
     assert.throws(() => paddleScreenshotLayout('invalid', 100, 100), /无法解析/);
 });
+
+
+test('numbered slides join justified fragments and hanging continuations without crossing list items', () => {
+    const lines = [];
+    for (let n=1;n<=7;n++) {
+        const y=60+(n-1)*90;
+        lines.push(line(`${n}.`,20,y,20,24));
+        lines.push(line(`Item${n} uses`,70,y,150,24),line('Python',370,y,100,24),line('functions',650,y,130,24));
+        lines.push(line(`continuation${n}.`,70,y+32,210,24));
+    }
+    const blocks=screenshotBlocks({lines},900,800);
+    for(let n=1;n<=7;n++) {
+        const body=blocks.find(b=>b.text.startsWith(`Item${n} `));
+        assert.equal(body.text,`Item${n} uses Python functions continuation${n}.`);
+        assert.equal(body.box.x,70);
+        assert.equal(body.box.y,60+(n-1)*90);
+        assert.equal(body.box.height,56);
+        assert.ok(blocks.some(b=>b.text===`${n}.`));
+    }
+    assert.equal(blocks.length,14);
+});
+
+test('a missing final list marker never attaches the next complete sentence to the preceding item', () => {
+    const blocks=screenshotBlocks({lines:[
+        line('5.',20,20,20,24),line('Use functions',70,20,200,24),line('effectively.',70,52,180,24),
+        line('6.',20,92,20,24),line('Define reusable code',70,92,300,24),line('with parameters.',70,124,230,24),
+        line('Write scripts',70,156,200,24),line('in an editor.',70,188,200,24),
+    ]},900,300);
+    const six=blocks.find(b=>b.text.startsWith('Define'));
+    assert.equal(six.text,'Define reusable code with parameters.');
+    assert.equal(blocks.find(b=>b.text.startsWith('Write')).text,'Write scripts in an editor.');
+});
+
+test('Paddle preserves uncertain numeric list anchors but still filters low-confidence prose', () => {
+    const item=(text,score,y)=>({text,score,box:[[10,y],[30,y],[30,y+24],[10,y+24]]});
+    const raw=paddleScreenshotLayout(JSON.stringify({code:100,data:[item('6',0.27,10),item('7.',0.28,60),item('noise',0.2,100),item('9',0.05,140)]}),500,200);
+    assert.deepEqual(raw.lines.map(l=>l.text),['6','7.']);
+});

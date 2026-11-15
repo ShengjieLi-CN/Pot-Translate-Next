@@ -25,6 +25,45 @@ const joinWords = (words) =>
         .join(' ')
         .replace(/([\u3400-\u9fff]) +(?=[\u3400-\u9fff])/g, '$1');
 
+// Numbered slides use hanging indents and sometimes very wide justified gaps.
+// Reassemble only confirmed, aligned list lanes; ordinary columns keep their gaps.
+function numberedListFragments(fragments, width) {
+    const number = (f) => /^\d{1,3}[.)、]?$/.test(f.text.trim());
+    const candidates = fragments.filter(number);
+    const anchors = candidates.filter((a) => candidates.some((b) =>
+        a !== b && Math.abs(a.box.x - b.box.x) < Math.min(a.fontHeight, b.fontHeight) &&
+        Math.abs(parseInt(a.text) - parseInt(b.text)) === 1 && Math.abs(a.box.y - b.box.y) < a.fontHeight * 12));
+    const used = new Set(), output = [];
+    const center = (f) => f.box.y + f.box.height / 2;
+    for (const anchor of anchors.sort((a,b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
+        const next = anchors.filter((b) => b.box.y > anchor.box.y + anchor.fontHeight && Math.abs(b.box.x-anchor.box.x)<anchor.fontHeight)
+            .sort((a,b)=>a.box.y-b.box.y)[0];
+        const right = anchors.filter((b) => b.box.x > anchor.box.x + anchor.fontHeight*8 && Math.abs(center(b)-center(anchor))<anchor.fontHeight)
+            .reduce((x,b)=>Math.min(x,b.box.x-anchor.fontHeight),width);
+        const rows = [];
+        const eligible = fragments.filter((f) => f !== anchor && !number(f) && !used.has(f) &&
+            f.box.x >= anchor.box.x + anchor.box.width && f.box.x < right &&
+            center(f) >= center(anchor)-anchor.fontHeight*0.6 &&
+            (!next || center(f)<center(next)-anchor.fontHeight*0.6) &&
+            Math.max(f.fontHeight,anchor.fontHeight)/Math.min(f.fontHeight,anchor.fontHeight)<1.6);
+        for (const f of eligible.sort((a,b)=>center(a)-center(b) || a.box.x-b.box.x)) {
+            const row=rows.find((row)=>Math.abs(center(row[0])-center(f))<Math.min(row[0].fontHeight,f.fontHeight)*0.6);
+            if(row) row.push(f); else rows.push([f]);
+        }
+        let previous=null, indent=null;
+        for(const row of rows) {
+            row.sort((a,b)=>a.box.x-b.box.x);
+            const box=unionBox(row), size=median(row.map(f=>f.fontHeight));
+            if(!previous && (Math.abs(center(row[0])-center(anchor))>size*0.7 || row[0].box.x-anchor.box.x-anchor.box.width>size*5)) break;
+            if(previous && (box.y-previous.box.y-previous.box.height>size || Math.abs(box.x-indent)>size*1.3 || /[.!?。！？]\s*$/.test(previous.text))) break;
+            indent ??=box.x;
+            const combined={...row[0], text:joinWords(row), box, fontHeight:size, listItem:anchor};
+            output.push(combined);row.forEach(f=>used.add(f));previous=combined;
+        }
+    }
+    return [...fragments.filter(f=>!used.has(f)),...output];
+}
+
 export function layoutScreenshotBlocks(result, width, height, restore) {
     const sx = width / (Number(result.width) || width),
         sy = height / (Number(result.height) || height);
@@ -108,14 +147,15 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
     // Overlapping tiles may return partial copies of the same row. Rejoin only
     // fragments on the same baseline with ordinary inter-word spacing.
     const lines = [];
-    for (const fragment of fragments.sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
+    for (const fragment of numberedListFragments(fragments, width).sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
         const previous = lines.find(
             (l) =>
                 Math.abs(l.box.y - fragment.box.y) < Math.min(l.fontHeight, fragment.fontHeight) * 0.35 &&
                 fragment.box.x >= l.box.x + l.box.width - 1 &&
                 fragment.box.x - l.box.x - l.box.width < Math.min(l.fontHeight, fragment.fontHeight) * 1.5 &&
                 Math.abs(l.fontHeight - fragment.fontHeight) < l.fontHeight * 0.3 &&
-                l.paragraph === fragment.paragraph
+                l.paragraph === fragment.paragraph &&
+                l.listItem === fragment.listItem
         );
         if (previous) {
             previous.text += ` ${fragment.text}`;
@@ -134,6 +174,9 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
             const gap = b.y - a.y - a.height,
                 size = Math.min(last.fontHeight, line.fontHeight);
             if (
+                /^\d{1,3}[.)、]?$/.test(last.text.trim()) ||
+                /^\d{1,3}[.)、]?$/.test(line.text.trim()) ||
+                last.listItem !== line.listItem ||
                 heading(last.text) ||
                 heading(line.text) ||
                 gap < -size * 0.15 ||
@@ -244,7 +287,7 @@ export function paddleScreenshotLayout(stdout, width, height) {
             !Array.isArray(points) ||
             points.length !== 4 ||
             points.some((p) => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite)) ||
-            (typeof item.score === 'number' && item.score < 0.3)
+            (typeof item.score === 'number' && item.score < (/^\d{1,3}[.)、]?$/.test(item.text.trim()) ? 0.15 : 0.3))
         )
             return [];
         const x = Math.min(...points.map((p) => p[0])),

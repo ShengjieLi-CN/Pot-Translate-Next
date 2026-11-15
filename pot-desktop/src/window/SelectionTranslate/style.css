@@ -1,10 +1,10 @@
-html[data-window-label='selection_translate'],
-html[data-window-label='selection_translate'] body,
-html[data-window-label='selection_translate'] #root,
-html[data-window-label='selection_translate'] #root > div {
+html[data-window-label^='selection_translate'],
+html[data-window-label^='selection_translate'] body,
+html[data-window-label^='selection_translate'] #root,
+html[data-window-label^='selection_translate'] #root > div {
     background: transparent !important;
 }
-html[data-window-label='selection_translate'] body {
+html[data-window-label^='selection_translate'] body {
     margin: 0;
     overflow: hidden;
 }
@@ -124,3 +124,12 @@ html[data-window-label='selection_translate'] body {
 .selection-service { display: flex; align-items: center; gap: 8px; }
 .selection-service select { flex: 1; min-width: 0; max-width: 100%; padding: 3px 6px; border-radius: 5px; background: hsl(var(--nextui-default-100)); color: inherit; cursor: pointer; }
 .selection-service select:disabled { cursor: default; }
+
+/* Keep every action reachable in the compact 200px-wide default window. */
+@media (max-width: 280px) {
+    .selection-toolbar { flex-wrap: wrap; height: auto; gap: 2px 4px; padding: 3px 8px; }
+    .selection-drag { flex: 0 0 100%; height: 20px; }
+    .selection-toolbar button { flex: 1; padding: 3px 4px; }
+    .selection-options { padding: 0 8px; }
+    .selection-content { padding: 12px; }
+}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
-import { listen } from '@tauri-apps/api/event';
+import { appWindow, currentMonitor } from '@tauri-apps/api/window';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { useTranslation } from 'react-i18next';
 import { store } from '../../utils/store';
@@ -29,12 +29,18 @@ export default function SelectionTranslate() {
     const audio = useRef(null);
     const [serviceName, setServiceName] = useState('');
     const [opacity] = useConfig('selection_window_opacity', 100);
-    const [serviceKey, setServiceKey] = useConfig('selection_translate_service', '');
+    const [savedServiceKey, setSavedServiceKey] = useConfig('selection_translate_service', '');
+    const [serviceKey, setServiceKey] = useState(null);
     const [serviceOptions, setServiceOptions] = useState([]);
     const [activeService, setActiveService] = useState('');
     const serviceLabel = (service) => service.config?.instanceName || (service.plugin ? service.title : t(`services.${service.name}.title`, { defaultValue: service.title || service.name }));
-    const contentRef = useRef(null);
     const current = useRef(0);
+    const contentRef = useRef(null);
+
+    // Remember the default for future windows without retranslating other open results.
+    useEffect(() => {
+        if (serviceKey === null && savedServiceKey !== null) setServiceKey(savedServiceKey);
+    }, [savedServiceKey, serviceKey]);
 
     const stopSpeech = () => {
         speechRevision.current++;
@@ -81,34 +87,52 @@ export default function SelectionTranslate() {
         }
     };
 
-    useEffect(() => {
-        if (!selection || selection.mode === 'badge') return;
-        const timer = setTimeout(async () => {
-            const content = contentRef.current;
-            if (!content) return;
-            // Measure an unconstrained copy; the visible viewport can already be scrolled.
-            const copy = content.cloneNode(true);
-            const text = blocks.map((b) => b.translation).join('');
-            const width = Math.min(560, Math.max(340, 300 + Math.sqrt(text.length) * 10), Math.max(200, screen.availWidth - 32));
-            Object.assign(copy.style, { position: 'fixed', left: '-10000px', top: '0', width: `${width - 2}px`, height: 'auto', maxHeight: 'none', overflow: 'visible', boxSizing: 'border-box' });
-            document.body.appendChild(copy);
-            const height = Math.ceil(copy.getBoundingClientRect().height) + 75;
-            copy.remove();
-            try {
-                const actual = await invoke('selection_resize', { id: selection.id, width, height });
-                // Re-measure height if the monitor forced a narrower window.
-                if (actual && actual[0] < width - 1 && selectedId.current === selection.id) {
-                    copy.style.width = `${actual[0] - 2}px`;
-                    document.body.appendChild(copy);
-                    const wrappedHeight = Math.ceil(copy.getBoundingClientRect().height) + 75;
-                    copy.remove();
-                    await invoke('selection_resize', { id: selection.id, width: actual[0], height: wrappedHeight });
-                }
-            } catch { /* A dismissed or superseded selection must not resize a new badge. */ }
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [selection, blocks, status, error, serviceName, speechError]);
     const selectedId = useRef(null);
+
+    useEffect(() => {
+        if (selection?.mode !== 'result') return;
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            try {
+                const monitor = await currentMonitor();
+                if (cancelled || selectedId.current !== selection.id) return;
+                const content = contentRef.current;
+                if (!content) return;
+                const dpi = monitor?.scaleFactor || window.devicePixelRatio || 1;
+                const availableWidth = monitor ? monitor.size.width / dpi : screen.availWidth;
+                const availableHeight = monitor ? monitor.size.height / dpi : screen.availHeight;
+                const maxWidth = Math.max(40, availableWidth - 32);
+                const maxHeight = Math.max(40, availableHeight - 96);
+                // Grow vertically first, then widen long translations. Preserve a
+                // user's larger window, and leave very long content scrollable.
+                let width = Math.min(maxWidth, Math.max(300, window.innerWidth));
+                const widthLimit = Math.min(maxWidth, Math.max(480, width));
+                const heightLimit = Math.min(maxHeight, Math.max(640, window.innerHeight));
+                const chromeHeight = content.parentElement.clientHeight - content.clientHeight + 2;
+                const copy = content.cloneNode(true);
+                copy.setAttribute('aria-hidden', 'true');
+                Object.assign(copy.style, { position: 'fixed', left: '-10000px', top: '0',
+                    height: 'auto', minHeight: '0', maxHeight: 'none', flex: 'none',
+                    overflow: 'visible', boxSizing: 'border-box', visibility: 'hidden' });
+                content.parentElement.appendChild(copy);
+                let height;
+                try {
+                    do {
+                        copy.style.width = `${Math.max(1, width - 2)}px`;
+                        height = Math.ceil(copy.getBoundingClientRect().height) + chromeHeight;
+                        if (height <= heightLimit || width >= widthLimit) break;
+                        width = Math.min(widthLimit, width + 40);
+                    } while (true);
+                } finally { copy.remove(); }
+                height = Math.min(heightLimit, Math.max(400, window.innerHeight, height));
+                if (!cancelled && (Math.abs(width - window.innerWidth) > 1 || Math.abs(height - window.innerHeight) > 1)) {
+                    await invoke('selection_resize', { id: selection.id, width, height });
+                }
+            } catch { /* A closed window or unavailable monitor must not interrupt translation. */ }
+        }, 120);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [selection, blocks, status, error, speechError, serviceName]);
+
 
     useEffect(() => {
         let disposed = false,
@@ -127,7 +151,7 @@ export default function SelectionTranslate() {
                 setServiceName('');
             }
         };
-        const unlisten = listen('selection_changed', ({ payload }) => {
+        const unlisten = appWindow.listen('selection_changed', ({ payload }) => {
             eventSeen = true;
             accept(payload);
         });
@@ -255,7 +279,7 @@ export default function SelectionTranslate() {
                     aria-label={pinned ? '取消窗口置顶' : '窗口置顶'}
                     title={pinned ? '取消窗口置顶' : '窗口置顶'}
                     aria-pressed={pinned}
-                    disabled={pinBusy}
+                    disabled={pinBusy || selection.mode !== 'result'}
                     onClick={async () => {
                         const id = selection.id;
                         setPinBusy(true);
@@ -294,7 +318,10 @@ export default function SelectionTranslate() {
                 <label className='selection-service'>翻译服务
                     <select aria-label='当前翻译服务' title={serviceName} value={activeService}
                         disabled={selection.mode !== 'result' || !serviceOptions.length}
-                        onChange={(event) => setServiceKey(event.target.value)}>
+                        onChange={(event) => {
+                            setServiceKey(event.target.value);
+                            setSavedServiceKey(event.target.value);
+                        }}>
                         {!serviceOptions.length && <option value=''>{selection.mode === 'capturing' ? '正在取词' : '正在加载服务'}</option>}
                         {serviceOptions.map((service) => <option key={service.key} value={service.key}>{serviceLabel(service)}</option>)}
                     </select>

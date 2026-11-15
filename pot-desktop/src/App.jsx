@@ -19,6 +19,8 @@ import { useConfig } from './hooks';
 import './style.css';
 import './i18n';
 
+const isSelectionWindow = appWindow.label === 'selection_translate' || appWindow.label.startsWith('selection_translate_');
+
 const windowMap = {
     translate: <Translate />,
     selection_translate: <SelectionTranslate />,
@@ -56,7 +58,7 @@ export default function App() {
                 if (e.key.startsWith('F') && e.key.length > 1) {
                     e.preventDefault();
                 }
-                if (e.key === 'Escape' && appWindow.label !== 'selection_translate') {
+                if (e.key === 'Escape' && !isSelectionWindow) {
                     await appWindow.close();
                 }
             });
@@ -69,7 +71,7 @@ export default function App() {
                 if (e.key.startsWith('F') && e.key.length > 1) {
                     e.preventDefault();
                 }
-                if (e.key === 'Escape' && appWindow.label !== 'selection_translate') {
+                if (e.key === 'Escape' && !isSelectionWindow) {
                     await appWindow.close();
                 }
             });
@@ -120,7 +122,7 @@ export default function App() {
     return (
         <>
             <WindowMaterial />
-            <BrowserRouter>{windowMap[appWindow.label]}</BrowserRouter>
+            <BrowserRouter>{isSelectionWindow ? <SelectionTranslate /> : windowMap[appWindow.label]}</BrowserRouter>
         </>
     );
 }

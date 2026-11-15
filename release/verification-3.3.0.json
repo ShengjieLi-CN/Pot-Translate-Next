@@ -1,0 +1,52 @@
+{
+  "file": "Pot.Translate.Next_3.3.0_x64_zh-CN.msi",
+  "version": "3.3.0",
+  "product": "Pot Translate Next",
+  "language": "2052",
+  "template": "x64;0",
+  "upgradeCode": "{36A5331F-FAC7-5F96-BA61-A293AAB740A7}",
+  "productCode": "{2EFD8EFB-FD35-4B97-BCF9-FFB4BBB92ACF}",
+  "bytes": 39702528,
+  "sha256": "C2E6542F772987C7F5E28368E36C5C72445B3FC627BA664CB73FDF9BC0146336",
+  "embeddedExeSha256": "F6D8AF7B2800083C88715E97207FB369E9491D954E3DEA202A7CEE4A31D51FDE",
+  "embeddedFiles": [
+    {
+      "bytes": 53919232,
+      "name": "-ddaenqh.exe|Pot Translate Next.exe"
+    }
+  ],
+  "tests": {
+    "unitPassed": 64,
+    "nativePassed": 21,
+    "nativeIgnored": 3,
+    "ui": [
+      "selection",
+      "automatic-input",
+      "updater",
+      "complex-screenshot"
+    ],
+    "packagedExecutable": {
+      "passed": true,
+      "windows": 3,
+      "defaultSize": {
+        "width": 300,
+        "height": 400,
+        "dpi": 1.5
+      },
+      "grownSize": {
+        "width": 480,
+        "height": 640
+      },
+      "checks": [
+        "native selection capture",
+        "independent payloads",
+        "pinned window permits new selections",
+        "per-window commands",
+        "native content auto-fit and overflow scrolling",
+        "manual resize preserved",
+        "close isolation",
+        "Escape isolation"
+      ]
+    }
+  }
+}
