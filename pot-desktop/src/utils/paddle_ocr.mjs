@@ -3,6 +3,10 @@ export const PADDLE_MODELS = ['PP-OCRv5', 'PP-OCRv6', 'PP-OCRv5-latin'];
 export const DEFAULT_PADDLE_CONFIG = { model: 'PP-OCRv5', apiKey: '' };
 export const PADDLE_JOBS_URL = 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
 
+export function formatRecognizedText(text, joinLines = false) {
+    return joinLines ? text.replace(/-\s+/g, '').replace(/\s+/g, ' ').trim() : text.trim();
+}
+
 function boxFrom(points) {
     if (!Array.isArray(points)) return null;
     if (points.length === 4 && points.every(Number.isFinite)) {
@@ -46,7 +50,9 @@ export function parsePaddleResult(jsonl) {
                 texts.push(text);
                 const box =
                     boxFrom(result.rec_polys?.[i]) || boxFrom(result.rec_boxes?.[i]) || boxFrom(result.dt_polys?.[i]);
-                if (box) lines.push({ text, box, words: [{ text, box }] });
+                // Paddle supplies full lines, not word boxes. Keep its recognized
+                // text even when a line touches the crop edge.
+                if (box) lines.push({ text, box });
             });
         }
     }

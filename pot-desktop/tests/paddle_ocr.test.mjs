@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestPaddleOcr, parsePaddleResult, PADDLE_MODELS, PADDLE_JOBS_URL } from '../src/utils/paddle_ocr.mjs';
+import {
+    requestPaddleOcr,
+    parsePaddleResult,
+    formatRecognizedText,
+    PADDLE_MODELS,
+    PADDLE_JOBS_URL,
+} from '../src/utils/paddle_ocr.mjs';
 import { screenshotBlocks } from '../src/utils/screenshot_translation.mjs';
 const config = { model: 'PP-OCRv6', apiKey: 'test-token' };
 const result = (prunedResult) => JSON.stringify({ result: { ocrResults: [{ prunedResult }] } });
@@ -42,6 +48,13 @@ function transport(responses) {
 const job = { data: { data: { jobId: 'test/job' } } };
 const done = { data: { data: { state: 'done', resultUrl: { jsonUrl: 'https://results.example.test/file.jsonl' } } } };
 
+test('recognition text formatting preserves paragraphs by default and joins lines only when requested', () => {
+    const text = '  A geome-\ntrical method.\n\nNext paragraph.  ';
+    assert.equal(formatRecognizedText(text), 'A geome-\ntrical method.\n\nNext paragraph.');
+    assert.equal(formatRecognizedText(text, true), 'A geometrical method. Next paragraph.');
+    assert.equal(formatRecognizedText('  end-to-end\nmethod ', true), 'end-to-end method');
+});
+
 test('cloud OCR sends selected model and image, polls jobs and downloads JSONL without leaking credentials', async () => {
     for (const model of PADDLE_MODELS) {
         const io = transport([job, { data: { data: { state: 'pending' } } }, done, { data: fixture }]);
@@ -67,6 +80,34 @@ test('Paddle polygon and rectangular bounds preserve in-place translation coordi
     assert.deepEqual(blocks[0].box, parsed.lines[0].box);
     const rect = parsePaddleResult(result({ rec_texts: ['Text'], rec_boxes: [[12, 13, 80, 33]] }));
     assert.deepEqual(rect.lines[0].box, { x: 12, y: 13, width: 68, height: 20 });
+});
+
+test('Paddle full lines touching any image edge remain available for translation', () => {
+    for (const box of [
+        [0, 20, 180, 40],
+        [10, 0, 180, 20],
+        [10, 20, 200, 40],
+        [10, 80, 180, 100],
+    ]) {
+        const parsed = parsePaddleResult(result({ rec_texts: ['Recognized text'], rec_boxes: [box] }));
+        const blocks = screenshotBlocks(parsed, 200, 100);
+        assert.equal(blocks.length, 1);
+        assert.equal(blocks[0].text, 'Recognized text');
+        assert.deepEqual(blocks[0].box, parsed.lines[0].box);
+    }
+});
+
+test('Paddle inline bullets without following spaces retain separate list items', () => {
+    for (const marker of ['•', '●', '▪', '◦', '‣', '⁃', '·']) {
+        const texts = ['First item', 'Second item', 'Third item', 'Fourth item'].map((text) => marker + text);
+        const parsed = parsePaddleResult(
+            result({ rec_texts: texts, rec_boxes: texts.map((_, i) => [20, 10 + i * 30, 280, 30 + i * 30]) })
+        );
+        assert.deepEqual(
+            screenshotBlocks(parsed, 300, 150).map((block) => block.text),
+            texts
+        );
+    }
 });
 
 test('empty images remain empty and incomplete coordinates retain every recognized line', () => {

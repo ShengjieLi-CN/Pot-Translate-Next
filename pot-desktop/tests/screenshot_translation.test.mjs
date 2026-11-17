@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { screenshotBackground, paddleScreenshotLayout } from '../src/utils/screenshot_layout.mjs';
-import { needsEnglishScreenshotFallback } from '../src/utils/screenshot_ocr.mjs';
+import { screenshotBackground } from '../src/utils/screenshot_layout.mjs';
 import {
     restoreScreenshotText,
     detectScreenshotDomain,
@@ -197,7 +196,7 @@ test('streams block translations and rejects dictionary/empty responses', async 
     for (const value of [{ word: 'entry' }, '', '[STREAM]']) {
         await assert.rejects(
             translateScreenshotBlocks(blocks, async () => value),
-            /text translation service/
+            /有效文本的翻译服务/
         );
     }
 });
@@ -327,19 +326,6 @@ test('local masks sample the original background and choose readable text on dar
     });
 });
 
-test('English OCR fallback is local and only replaces Latin-dominant results without an English pack', () => {
-    const result = { englishAvailable: false, lines: [{ text: 'This is a friendly reminder about your parcel.' }] };
-    assert.equal(needsEnglishScreenshotFallback(result), true);
-    assert.equal(needsEnglishScreenshotFallback({ ...result, englishAvailable: true }), false);
-    assert.equal(
-        needsEnglishScreenshotFallback({
-            englishAvailable: false,
-            lines: [{ text: '中文正文包含很多文字，保留原有中文识别效果。English' }],
-        }),
-        false
-    );
-});
-
 test('English body and Chinese interface labels keep their own translation direction', () => {
     assert.equal(screenshotBlockSource('Your parcel is ready to collect.', 'zh_cn'), 'en');
     assert.equal(screenshotBlockSource('收件箱和发件箱', 'en'), 'zh_cn');
@@ -358,95 +344,65 @@ test('preserves collection codes without sending them to a translation model', a
     assert.equal(result[0].translation, '123456');
 });
 
-test('Paddle screenshot adapter retains original quadrilateral positions and reports empty/error results', () => {
-    const stdout =
-        'OCR init completed.\n' +
-        JSON.stringify({
-            code: 100,
-            data: [
-                {
-                    text: 'Delivery reminder',
-                    score: 0.98,
-                    box: [
-                        [20, 40],
-                        [620, 40],
-                        [620, 80],
-                        [20, 80],
-                    ],
-                },
-                {
-                    text: 'noise',
-                    score: 0.1,
-                    box: [
-                        [0, 0],
-                        [50, 0],
-                        [50, 50],
-                        [0, 50],
-                    ],
-                },
-            ],
-        });
-    const result = paddleScreenshotLayout(stdout, 1600, 1000);
-    const blocks = screenshotBlocks(result, 800, 500);
-    assert.equal(blocks.length, 1);
-    assert.deepEqual(blocks[0].box, { x: 10, y: 20, width: 300, height: 20 });
-    assert.equal(blocks[0].text, 'Delivery reminder');
-    assert.deepEqual(paddleScreenshotLayout('{"code":101,"data":"No text"}', 100, 100).lines, []);
-    assert.throws(() => paddleScreenshotLayout('{"code":200,"data":"Missing image"}', 100, 100), /Missing image/);
-    assert.throws(() => paddleScreenshotLayout('invalid', 100, 100), /无法解析/);
-});
-
-
 test('numbered slides join justified fragments and hanging continuations without crossing list items', () => {
     const lines = [];
-    for (let n=1;n<=7;n++) {
-        const y=60+(n-1)*90;
-        lines.push(line(`${n}.`,20,y,20,24));
-        lines.push(line(`Item${n} uses`,70,y,150,24),line('Python',370,y,100,24),line('functions',650,y,130,24));
-        lines.push(line(`continuation${n}.`,70,y+32,210,24));
+    for (let n = 1; n <= 7; n++) {
+        const y = 60 + (n - 1) * 90;
+        lines.push(line(`${n}.`, 20, y, 20, 24));
+        lines.push(
+            line(`Item${n} uses`, 70, y, 150, 24),
+            line('Python', 370, y, 100, 24),
+            line('functions', 650, y, 130, 24)
+        );
+        lines.push(line(`continuation${n}.`, 70, y + 32, 210, 24));
     }
-    const blocks=screenshotBlocks({lines},900,800);
-    for(let n=1;n<=7;n++) {
-        const body=blocks.find(b=>b.text.startsWith(`Item${n} `));
-        assert.equal(body.text,`Item${n} uses Python functions continuation${n}.`);
-        assert.equal(body.box.x,70);
-        assert.equal(body.box.y,60+(n-1)*90);
-        assert.equal(body.box.height,56);
-        assert.ok(blocks.some(b=>b.text===`${n}.`));
+    const blocks = screenshotBlocks({ lines }, 900, 800);
+    for (let n = 1; n <= 7; n++) {
+        const body = blocks.find((b) => b.text.startsWith(`Item${n} `));
+        assert.equal(body.text, `Item${n} uses Python functions continuation${n}.`);
+        assert.equal(body.box.x, 70);
+        assert.equal(body.box.y, 60 + (n - 1) * 90);
+        assert.equal(body.box.height, 56);
+        assert.ok(blocks.some((b) => b.text === `${n}.`));
     }
-    assert.equal(blocks.length,14);
+    assert.equal(blocks.length, 14);
 });
 
 test('a missing final list marker never attaches the next complete sentence to the preceding item', () => {
-    const blocks=screenshotBlocks({lines:[
-        line('5.',20,20,20,24),line('Use functions',70,20,200,24),line('effectively.',70,52,180,24),
-        line('6.',20,92,20,24),line('Define reusable code',70,92,300,24),line('with parameters.',70,124,230,24),
-        line('Write scripts',70,156,200,24),line('in an editor.',70,188,200,24),
-    ]},900,300);
-    const six=blocks.find(b=>b.text.startsWith('Define'));
-    assert.equal(six.text,'Define reusable code with parameters.');
-    assert.equal(blocks.find(b=>b.text.startsWith('Write')).text,'Write scripts in an editor.');
-});
-
-test('Paddle preserves uncertain numeric list anchors but still filters low-confidence prose', () => {
-    const item=(text,score,y)=>({text,score,box:[[10,y],[30,y],[30,y+24],[10,y+24]]});
-    const raw=paddleScreenshotLayout(JSON.stringify({code:100,data:[item('6',0.27,10),item('7.',0.28,60),item('noise',0.2,100),item('9',0.05,140)]}),500,200);
-    assert.deepEqual(raw.lines.map(l=>l.text),['6','7.']);
+    const blocks = screenshotBlocks(
+        {
+            lines: [
+                line('5.', 20, 20, 20, 24),
+                line('Use functions', 70, 20, 200, 24),
+                line('effectively.', 70, 52, 180, 24),
+                line('6.', 20, 92, 20, 24),
+                line('Define reusable code', 70, 92, 300, 24),
+                line('with parameters.', 70, 124, 230, 24),
+                line('Write scripts', 70, 156, 200, 24),
+                line('in an editor.', 70, 188, 200, 24),
+            ],
+        },
+        900,
+        300
+    );
+    const six = blocks.find((b) => b.text.startsWith('Define'));
+    assert.equal(six.text, 'Define reusable code with parameters.');
+    assert.equal(blocks.find((b) => b.text.startsWith('Write')).text, 'Write scripts in an editor.');
 });
 
 test('dense paper with a narrow repeated gutter retains column order and indented paragraph boundaries', () => {
-    const rows=[];
-    for(let i=0;i<13;i++) {
-        rows.push(line(`Left column row ${i}.`,35,22+i*41,982,37));
-        const indent=i===10?32:0;
-        rows.push(line(`Right column row ${i}.`,1053+indent,22+i*41,982-indent,37));
+    const rows = [];
+    for (let i = 0; i < 13; i++) {
+        rows.push(line(`Left column row ${i}.`, 35, 22 + i * 41, 982, 37));
+        const indent = i === 10 ? 32 : 0;
+        rows.push(line(`Right column row ${i}.`, 1053 + indent, 22 + i * 41, 982 - indent, 37));
     }
-    const blocks=screenshotBlocks({lines:rows},2128,603);
-    assert.equal(blocks.length,3);
+    const blocks = screenshotBlocks({ lines: rows }, 2128, 603);
+    assert.equal(blocks.length, 3);
     assert.ok(blocks[0].text.includes('Left column row 12.'));
     assert.ok(blocks[1].text.includes('Right column row 9.'));
     assert.ok(blocks[2].text.startsWith('Right column row 10.'));
-    assert.ok(blocks.every(b=>b.box.width<1000));
+    assert.ok(blocks.every((b) => b.box.width < 1000));
 });
 
 // Geometry from the reported slide: Paddle detects the ten text rows but none
@@ -466,13 +422,22 @@ const slideRows = [
 
 test('slide with omitted bullets retains four complete items at original positions and different DPI', () => {
     for (const scale of [0.5, 1, 1.5]) {
-        const lines = slideRows.map(([text, ...box]) => line(text, ...box.map(n => n * scale)));
+        const lines = slideRows.map(([text, ...box]) => line(text, ...box.map((n) => n * scale)));
         const blocks = screenshotBlocks({ lines }, 1421 * scale, 859 * scale);
-        assert.deepEqual(blocks.map(b => b.text), [
-            slideRows.slice(0, 2), slideRows.slice(2, 4), slideRows.slice(4, 7), slideRows.slice(7),
-        ].map(rows => rows.map(row => row[0]).join(' ')));
-        assert.deepEqual(blocks.map(b => b.box.y / scale), [110, 239, 366, 551]);
-        assert.deepEqual(blocks.map(b => b.box.height / scale), [111, 104, 174, 171]);
+        assert.deepEqual(
+            blocks.map((b) => b.text),
+            [slideRows.slice(0, 2), slideRows.slice(2, 4), slideRows.slice(4, 7), slideRows.slice(7)].map((rows) =>
+                rows.map((row) => row[0]).join(' ')
+            )
+        );
+        assert.deepEqual(
+            blocks.map((b) => b.box.y / scale),
+            [110, 239, 366, 551]
+        );
+        assert.deepEqual(
+            blocks.map((b) => b.box.height / scale),
+            [111, 104, 174, 171]
+        );
     }
 });
 
@@ -480,7 +445,8 @@ test('regularly spaced sentences remain in a paragraph and modest gaps within a 
     for (const rows of [
         Array.from({ length: 8 }, (_, i) => line(`Sentence ${i}.`, 100, 20 + i * 30, 500, 24)),
         [20, 50, 80, 120, 150, 180, 210].map((y, i) => line(`wrapped clause ${i}`, 100, y, 500, 24)),
-    ]) assert.equal(screenshotBlocks({ lines: rows }, 800, 400).length, 1);
+    ])
+        assert.equal(screenshotBlocks({ lines: rows }, 800, 400).length, 1);
 });
 
 test('paragraph spacing is learned within each column without splitting a neighboring regular paragraph', () => {
@@ -488,7 +454,7 @@ test('paragraph spacing is learned within each column without splitting a neighb
     const right = Array.from({ length: 10 }, (_, i) => line(`Other column ${i}.`, 1500, 110 + i * 70, 1100, 54));
     const blocks = screenshotBlocks({ lines: [...left, ...right] }, 2800, 900);
     assert.equal(blocks.length, 5);
-    assert.equal(blocks.at(-1).text, right.map(row => row.text).join(' '));
+    assert.equal(blocks.at(-1).text, right.map((row) => row.text).join(' '));
 });
 
 test('explicit inline and separate bullet markers start a new item even without extra paragraph spacing', () => {
@@ -497,7 +463,7 @@ test('explicit inline and separate bullet markers start a new item even without 
         if (separate) lines.push(line('•', 60, 89, 8, 8));
         lines.push(line(`${separate ? '' : '• '}Second item`, 100, 80, 300, 24));
         lines.push(line('continues here.', 100, 110, 250, 24));
-        const blocks = screenshotBlocks({ lines }, 800, 300).filter(b => b.text !== '•');
+        const blocks = screenshotBlocks({ lines }, 800, 300).filter((b) => b.text !== '•');
         assert.equal(blocks.length, 2);
         assert.match(blocks[0].text, /^First item continues\.$/);
         assert.match(blocks[1].text, /Second item[\s\S]*continues here\.$/);
@@ -505,32 +471,58 @@ test('explicit inline and separate bullet markers start a new item even without 
 });
 
 test('bounded parallel translation publishes the correct block even when responses arrive out of order', async () => {
-    const blocks=screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.',500,300);
-    let active=0,maximum=0;
-    const finish=new Map(),updates=[];
-    const promise=translateScreenshotBlocks(blocks,async(text,stream)=>{
-        active++;maximum=Math.max(maximum,active);
-        await new Promise(resolve=>finish.set(text,resolve));
-        stream(`partial:${text}`);active--;return `translated:${text}`;
-    },{concurrency:3,onUpdate:value=>updates.push(value)});
-    assert.equal(finish.size,3);
-    finish.get('Two.')();await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(updates[0][1].translation,'partial:Two.');
-    assert.equal(updates[0][0].translation,undefined);
-    finish.get('Four.')();finish.get('Three.')();finish.get('One.')();
-    const result=await promise;
-    assert.equal(maximum,3);
-    assert.deepEqual(result.map(b=>b.translation),blocks.map(b=>`translated:${b.text}`));
+    const blocks = screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.', 500, 300);
+    let active = 0,
+        maximum = 0;
+    const finish = new Map(),
+        updates = [];
+    const promise = translateScreenshotBlocks(
+        blocks,
+        async (text, stream) => {
+            active++;
+            maximum = Math.max(maximum, active);
+            await new Promise((resolve) => finish.set(text, resolve));
+            stream(`partial:${text}`);
+            active--;
+            return `translated:${text}`;
+        },
+        { concurrency: 3, onUpdate: (value) => updates.push(value) }
+    );
+    assert.equal(finish.size, 3);
+    finish.get('Two.')();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(updates[0][1].translation, 'partial:Two.');
+    assert.equal(updates[0][0].translation, undefined);
+    finish.get('Four.')();
+    finish.get('Three.')();
+    finish.get('One.')();
+    const result = await promise;
+    assert.equal(maximum, 3);
+    assert.deepEqual(
+        result.map((b) => b.translation),
+        blocks.map((b) => `translated:${b.text}`)
+    );
 });
 
 test('parallel translation stops launching work or publishing late results after a failure', async () => {
-    const blocks=screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.',500,300);
-    const finish=new Map();let calls=0,updates=0;
-    const promise=translateScreenshotBlocks(blocks,async(text,stream)=>{
-        calls++;await new Promise((resolve,reject)=>finish.set(text,{resolve,reject}));stream('late');return 'late';
-    },{concurrency:2,onUpdate:()=>updates++});
+    const blocks = screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.', 500, 300);
+    const finish = new Map();
+    let calls = 0,
+        updates = 0;
+    const promise = translateScreenshotBlocks(
+        blocks,
+        async (text, stream) => {
+            calls++;
+            await new Promise((resolve, reject) => finish.set(text, { resolve, reject }));
+            stream('late');
+            return 'late';
+        },
+        { concurrency: 2, onUpdate: () => updates++ }
+    );
     finish.get('One.').reject(new Error('offline'));
-    await assert.rejects(promise,/offline/);
-    finish.get('Two.').resolve();await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(calls,2);assert.equal(updates,0);
+    await assert.rejects(promise, /offline/);
+    finish.get('Two.').resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 2);
+    assert.equal(updates, 0);
 });

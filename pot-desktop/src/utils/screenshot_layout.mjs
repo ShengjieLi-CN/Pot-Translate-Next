@@ -32,38 +32,78 @@ const joinWords = (words) =>
 function numberedListFragments(fragments, width) {
     const number = (f) => /^\d{1,3}[.)、]?$/.test(f.text.trim());
     const candidates = fragments.filter(number);
-    const anchors = candidates.filter((a) => candidates.some((b) =>
-        a !== b && Math.abs(a.box.x - b.box.x) < Math.min(a.fontHeight, b.fontHeight) &&
-        Math.abs(parseInt(a.text) - parseInt(b.text)) === 1 && Math.abs(a.box.y - b.box.y) < a.fontHeight * 12));
-    const used = new Set(), output = [];
+    const anchors = candidates.filter((a) =>
+        candidates.some(
+            (b) =>
+                a !== b &&
+                Math.abs(a.box.x - b.box.x) < Math.min(a.fontHeight, b.fontHeight) &&
+                Math.abs(parseInt(a.text) - parseInt(b.text)) === 1 &&
+                Math.abs(a.box.y - b.box.y) < a.fontHeight * 12
+        )
+    );
+    const used = new Set(),
+        output = [];
     const center = (f) => f.box.y + f.box.height / 2;
-    for (const anchor of anchors.sort((a,b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
-        const next = anchors.filter((b) => b.box.y > anchor.box.y + anchor.fontHeight && Math.abs(b.box.x-anchor.box.x)<anchor.fontHeight)
-            .sort((a,b)=>a.box.y-b.box.y)[0];
-        const right = anchors.filter((b) => b.box.x > anchor.box.x + anchor.fontHeight*8 && Math.abs(center(b)-center(anchor))<anchor.fontHeight)
-            .reduce((x,b)=>Math.min(x,b.box.x-anchor.fontHeight),width);
+    for (const anchor of anchors.sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
+        const next = anchors
+            .filter(
+                (b) =>
+                    b.box.y > anchor.box.y + anchor.fontHeight && Math.abs(b.box.x - anchor.box.x) < anchor.fontHeight
+            )
+            .sort((a, b) => a.box.y - b.box.y)[0];
+        const right = anchors
+            .filter(
+                (b) =>
+                    b.box.x > anchor.box.x + anchor.fontHeight * 8 &&
+                    Math.abs(center(b) - center(anchor)) < anchor.fontHeight
+            )
+            .reduce((x, b) => Math.min(x, b.box.x - anchor.fontHeight), width);
         const rows = [];
-        const eligible = fragments.filter((f) => f !== anchor && !number(f) && !used.has(f) &&
-            f.box.x >= anchor.box.x + anchor.box.width && f.box.x < right &&
-            center(f) >= center(anchor)-anchor.fontHeight*0.6 &&
-            (!next || center(f)<center(next)-anchor.fontHeight*0.6) &&
-            Math.max(f.fontHeight,anchor.fontHeight)/Math.min(f.fontHeight,anchor.fontHeight)<1.6);
-        for (const f of eligible.sort((a,b)=>center(a)-center(b) || a.box.x-b.box.x)) {
-            const row=rows.find((row)=>Math.abs(center(row[0])-center(f))<Math.min(row[0].fontHeight,f.fontHeight)*0.6);
-            if(row) row.push(f); else rows.push([f]);
+        const eligible = fragments.filter(
+            (f) =>
+                f !== anchor &&
+                !number(f) &&
+                !used.has(f) &&
+                f.box.x >= anchor.box.x + anchor.box.width &&
+                f.box.x < right &&
+                center(f) >= center(anchor) - anchor.fontHeight * 0.6 &&
+                (!next || center(f) < center(next) - anchor.fontHeight * 0.6) &&
+                Math.max(f.fontHeight, anchor.fontHeight) / Math.min(f.fontHeight, anchor.fontHeight) < 1.6
+        );
+        for (const f of eligible.sort((a, b) => center(a) - center(b) || a.box.x - b.box.x)) {
+            const row = rows.find(
+                (row) => Math.abs(center(row[0]) - center(f)) < Math.min(row[0].fontHeight, f.fontHeight) * 0.6
+            );
+            if (row) row.push(f);
+            else rows.push([f]);
         }
-        let previous=null, indent=null;
-        for(const row of rows) {
-            row.sort((a,b)=>a.box.x-b.box.x);
-            const box=unionBox(row), size=median(row.map(f=>f.fontHeight));
-            if(!previous && (Math.abs(center(row[0])-center(anchor))>size*0.7 || row[0].box.x-anchor.box.x-anchor.box.width>size*5)) break;
-            if(previous && (box.y-previous.box.y-previous.box.height>size || Math.abs(box.x-indent)>size*1.3 || /[.!?。！？]\s*$/.test(previous.text))) break;
-            indent ??=box.x;
-            const combined={...row[0], text:joinWords(row), box, fontHeight:size, listItem:anchor};
-            output.push(combined);row.forEach(f=>used.add(f));previous=combined;
+        let previous = null,
+            indent = null;
+        for (const row of rows) {
+            row.sort((a, b) => a.box.x - b.box.x);
+            const box = unionBox(row),
+                size = median(row.map((f) => f.fontHeight));
+            if (
+                !previous &&
+                (Math.abs(center(row[0]) - center(anchor)) > size * 0.7 ||
+                    row[0].box.x - anchor.box.x - anchor.box.width > size * 5)
+            )
+                break;
+            if (
+                previous &&
+                (box.y - previous.box.y - previous.box.height > size ||
+                    Math.abs(box.x - indent) > size * 1.3 ||
+                    /[.!?。！？]\s*$/.test(previous.text))
+            )
+                break;
+            indent ??= box.x;
+            const combined = { ...row[0], text: joinWords(row), box, fontHeight: size, listItem: anchor };
+            output.push(combined);
+            row.forEach((f) => used.add(f));
+            previous = combined;
         }
     }
-    return [...fragments.filter(f=>!used.has(f)),...output];
+    return [...fragments.filter((f) => !used.has(f)), ...output];
 }
 
 // Repeated narrow whitespace lanes are real column gutters even when they are
@@ -73,9 +113,15 @@ function columnGutters(fragments) {
     for (const left of fragments) {
         for (const right of fragments) {
             const size = Math.min(left.fontHeight, right.fontHeight);
-            const start = left.box.x + left.box.width, end = right.box.x;
-            if (end - start < Math.max(10, size * 0.6) || left.box.width < size * 6 || right.box.width < size * 6 ||
-                Math.abs(left.box.y - right.box.y) > size * 0.6) continue;
+            const start = left.box.x + left.box.width,
+                end = right.box.x;
+            if (
+                end - start < Math.max(10, size * 0.6) ||
+                left.box.width < size * 6 ||
+                right.box.width < size * 6 ||
+                Math.abs(left.box.y - right.box.y) > size * 0.6
+            )
+                continue;
             gaps.push({ start, end, y: Math.min(left.box.y, right.box.y), size });
         }
     }
@@ -84,8 +130,10 @@ function columnGutters(fragments) {
         const x = (gap.start + gap.end) / 2;
         if (gutters.some((g) => Math.abs(g.x - x) < gap.size * 0.5)) continue;
         const rows = gaps.filter((g) => g.start <= x && g.end >= x);
-        const top = Math.min(...rows.map((g) => g.y)), bottom = Math.max(...rows.map((g) => g.y));
-        if (rows.length >= 3 && bottom - top > gap.size * 2) gutters.push({ x, top: top - gap.size, bottom: bottom + gap.size });
+        const top = Math.min(...rows.map((g) => g.y)),
+            bottom = Math.max(...rows.map((g) => g.y));
+        if (rows.length >= 3 && bottom - top > gap.size * 2)
+            gutters.push({ x, top: top - gap.size, bottom: bottom + gap.size });
     }
     return gutters;
 }
@@ -95,7 +143,7 @@ function columnGutters(fragments) {
 // as a paragraph break. Use row centres: bold text and descenders change ink-box
 // heights enough that the empty gap alone is unreliable.
 function paragraphStarts(lines) {
-    const bullet = (text) => /^[•●▪◦‣⁃·](?:\s|$)/u.test(text.trim());
+    const bullet = (text) => /^[•●▪◦‣⁃·]/u.test(text.trim());
     const center = (line) => line.box.y + line.box.height / 2;
     const sameLane = (a, b) =>
         Math.abs(a.box.x - b.box.x) <= Math.min(a.fontHeight, b.fontHeight) * 0.65 &&
@@ -103,8 +151,12 @@ function paragraphStarts(lines) {
         Math.min(a.box.x + a.box.width, b.box.x + b.box.width) - Math.max(a.box.x, b.box.x) >=
             Math.min(a.box.width, b.box.width) * 0.5;
     const pairs = lines.flatMap((previous) => {
-        const next = lines.filter((line) => sameLane(previous, line) &&
-            line.box.y >= previous.box.y + previous.box.height - previous.fontHeight * 0.15)
+        const next = lines
+            .filter(
+                (line) =>
+                    sameLane(previous, line) &&
+                    line.box.y >= previous.box.y + previous.box.height - previous.fontHeight * 0.15
+            )
             .sort((a, b) => a.box.y - b.box.y)[0];
         if (!next) return [];
         const pitch = center(next) - center(previous);
@@ -113,18 +165,24 @@ function paragraphStarts(lines) {
     const starts = new Set(lines.filter((line) => bullet(line.text)));
     for (const { previous, next, pitch } of pairs) {
         if (!/[.!?。！？][”’"')\]]?\s*$/.test(previous.text) || previous.listItem || next.listItem) continue;
-        const nearby = pairs.filter((pair) => sameLane(previous, pair.previous) &&
-            Math.abs(center(previous) - center(pair.previous)) < previous.fontHeight * 20);
+        const nearby = pairs.filter(
+            (pair) =>
+                sameLane(previous, pair.previous) &&
+                Math.abs(center(previous) - center(pair.previous)) < previous.fontHeight * 20
+        );
         if (nearby.length < 4) continue;
         const typicalPitch = median(nearby.map((pair) => pair.pitch));
-        if (pitch > typicalPitch * 1.12 && pitch - typicalPitch > previous.fontHeight * 0.12)
-            starts.add(next);
+        if (pitch > typicalPitch * 1.12 && pitch - typicalPitch > previous.fontHeight * 0.12) starts.add(next);
     }
     // A detected marker can be a separate, much smaller OCR box than its text.
     for (const marker of lines.filter((line) => /^[•●▪◦‣⁃·]$/u.test(line.text.trim()))) {
-        const body = lines.filter((line) => line.box.x > marker.box.x + marker.box.width &&
-            line.box.x - marker.box.x - marker.box.width < line.fontHeight * 3 &&
-            Math.abs(center(line) - center(marker)) < line.fontHeight * 0.6)
+        const body = lines
+            .filter(
+                (line) =>
+                    line.box.x > marker.box.x + marker.box.width &&
+                    line.box.x - marker.box.x - marker.box.width < line.fontHeight * 3 &&
+                    Math.abs(center(line) - center(marker)) < line.fontHeight * 0.6
+            )
             .sort((a, b) => a.box.x - b.box.x)[0];
         if (body) starts.add(body);
     }
@@ -215,7 +273,9 @@ export function layoutScreenshotBlocks(result, width, height, restore, pixels) {
     // fragments on the same baseline with ordinary inter-word spacing.
     const gutters = columnGutters(fragments);
     const lines = [];
-    for (const fragment of numberedListFragments(fragments, width).sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
+    for (const fragment of numberedListFragments(fragments, width).sort(
+        (a, b) => a.box.y - b.box.y || a.box.x - b.box.x
+    )) {
         const previous = lines.find(
             (l) =>
                 Math.abs(l.box.y - fragment.box.y) < Math.min(l.fontHeight, fragment.fontHeight) * 0.35 &&
@@ -224,8 +284,13 @@ export function layoutScreenshotBlocks(result, width, height, restore, pixels) {
                 Math.abs(l.fontHeight - fragment.fontHeight) < l.fontHeight * 0.3 &&
                 l.paragraph === fragment.paragraph &&
                 l.listItem === fragment.listItem &&
-                !gutters.some((g) => g.x > l.box.x + l.box.width && g.x < fragment.box.x &&
-                    fragment.box.y >= g.top && fragment.box.y <= g.bottom)
+                !gutters.some(
+                    (g) =>
+                        g.x > l.box.x + l.box.width &&
+                        g.x < fragment.box.x &&
+                        fragment.box.y >= g.top &&
+                        fragment.box.y <= g.bottom
+                )
         );
         if (previous) {
             previous.text += ` ${fragment.text}`;
@@ -301,8 +366,10 @@ export function layoutScreenshotBlocks(result, width, height, restore, pixels) {
         const sorted = [...items].sort((a, b) => a.box.x - b.box.x);
         let right = sorted[0].box.x + sorted[0].box.width;
         for (let i = 1; i < sorted.length; i++) {
-            if (sorted[i].box.x - right > Math.max(12, typical * 1.5) ||
-                gutters.some((g) => g.x > right && g.x < sorted[i].box.x))
+            if (
+                sorted[i].box.x - right > Math.max(12, typical * 1.5) ||
+                gutters.some((g) => g.x > right && g.x < sorted[i].box.x)
+            )
                 return [...order(sorted.slice(0, i)), ...order(sorted.slice(i))];
             right = Math.max(right, sorted[i].box.x + sorted[i].box.width);
         }
@@ -337,43 +404,4 @@ export function screenshotBackground(pixels, width, height, box) {
         background: `rgb(${rgb.join(', ')})`,
         color: rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 < 140 ? '#fff' : '#172033',
     };
-}
-
-export function paddleScreenshotLayout(stdout, width, height) {
-    // Paddle writes startup/progress messages before its one-line JSON result.
-    let result;
-    for (const line of String(stdout).split(/\r?\n/).reverse()) {
-        try {
-            const parsed = JSON.parse(line.trim());
-            if (parsed && typeof parsed === 'object' && 'code' in parsed) {
-                result = parsed;
-                break;
-            }
-        } catch {}
-    }
-    if (!result) throw new Error('Paddle OCR 返回的位置数据无法解析。');
-    if (result.code === 101) return { width, height, lines: [] };
-    if (result.code !== 100 || !Array.isArray(result.data))
-        throw new Error(`Paddle OCR 识别失败（${result.code}）：${String(result.data || '')}`);
-    const lines = result.data.flatMap((item) => {
-        const points = item.box;
-        if (
-            !item.text?.trim() ||
-            !Array.isArray(points) ||
-            points.length !== 4 ||
-            points.some((p) => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite)) ||
-            (typeof item.score === 'number' && item.score < (/^\d{1,3}[.)、]?$/.test(item.text.trim()) ? 0.15 : 0.3))
-        )
-            return [];
-        const x = Math.min(...points.map((p) => p[0])),
-            y = Math.min(...points.map((p) => p[1]));
-        const box = {
-            x,
-            y,
-            width: Math.max(...points.map((p) => p[0])) - x,
-            height: Math.max(...points.map((p) => p[1])) - y,
-        };
-        return valid(box) ? [{ text: item.text.trim(), box, words: [{ text: item.text.trim(), box }] }] : [];
-    });
-    return { width, height, lines };
 }

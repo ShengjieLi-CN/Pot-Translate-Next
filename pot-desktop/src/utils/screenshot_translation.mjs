@@ -120,7 +120,7 @@ export async function translateScreenshotBlocks(
                       });
                 if (!active()) return;
                 if (typeof translated !== 'string' || !translated.trim() || translated === '[STREAM]') {
-                    throw new Error('Screenshot translation requires a text translation service.');
+                    throw new Error('截图翻译需要返回有效文本的翻译服务。');
                 }
                 output[index] = { ...block, translation: translated.trim() };
                 publish();

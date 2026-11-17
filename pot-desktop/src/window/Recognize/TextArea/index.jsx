@@ -35,10 +35,9 @@ export default function TextArea() {
         setLoading(false);
         if (base64 && paddleConfig !== null && autoCopy !== null && deleteNewline !== null && hideWindow !== null) {
             setLoading(true);
-            recognize(base64, 'auto', { config: paddleConfig, isCurrent: () => current })
-                .then(async (value) => {
+            recognize(base64, 'auto', { config: paddleConfig, joinLines: deleteNewline, isCurrent: () => current })
+                .then(async (text) => {
                     if (!current) return;
-                    const text = deleteNewline ? value.replace(/\-\s+/g, '').replace(/\s+/g, ' ').trim() : value.trim();
                     setText(text);
                     if (autoCopy && text) {
                         await writeText(text);

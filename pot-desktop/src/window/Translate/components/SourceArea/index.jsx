@@ -92,9 +92,11 @@ export default function SourceArea(props) {
             const revision = sourceRevision.current;
             try {
                 const base64 = await invoke('get_base64');
-                const value = await recognize(base64, 'auto', { isCurrent: () => revision === sourceRevision.current });
+                const newText = await recognize(base64, 'auto', {
+                    joinLines: deleteNewline,
+                    isCurrent: () => revision === sourceRevision.current,
+                });
                 if (revision !== sourceRevision.current) return;
-                const newText = deleteNewline ? value.replace(/\-\s+/g, '').replace(/\s+/g, ' ').trim() : value.trim();
                 setSourceText((old) => (incrementalTranslate ? old + ' ' + newText : newText));
                 await detect_language(newText);
                 if (revision === sourceRevision.current) syncSourceText();

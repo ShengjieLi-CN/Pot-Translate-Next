@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "pot",
-        "version": "3.3.4"
+        "version": "3.3.5"
     },
     "tauri": {
         "allowlist": {
@@ -83,16 +83,14 @@
                 "depends": [
                     "libxdo-dev",
                     "libxcb1",
-                    "libxrandr2",
-                    "tesseract-ocr"
+                    "libxrandr2"
                 ]
             },
             "rpm": {
                 "depends": [
                     "libxdo-dev",
                     "libxcb1",
-                    "libxrandr2",
-                    "tesseract-ocr"
+                    "libxrandr2"
                 ]
             },
             "macOS": {

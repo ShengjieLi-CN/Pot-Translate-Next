@@ -2,7 +2,9 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.0 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.0)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.5 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.5)
+
+3.3.5 将 OCR 统一为 Paddle 官方云端服务，改善截图识别耗时、双栏阅读顺序及项目段落分组，并清理已停用的本地 OCR 资源。模型和 API Key 在“文字识别”页面配置。
 
 ## 功能演示
 
@@ -11,9 +13,8 @@
 ### 截图原位翻译
 
 快捷键或托盘启动，框选后直接在原位置显示译文。支持复杂图文、小字号英文、局部背景保留、原图对照和复制。
-<img width="1853" height="1246" alt="C__Users_ShengjieLi_AppData_Local_ElegantClipboard_images_0d86e8fb5a0027aeeaa589b7b7b0585f" src="https://github.com/user-attachments/assets/b284b6cc-0bc3-4352-93cc-39c31e81ee66" />
-<img width="1828" height="1271" alt="C__Users_ShengjieLi_AppData_Local_ElegantClipboard_images_abef5e2c52b795d098dcd3a3e43e04bd" src="https://github.com/user-attachments/assets/c54f7cb6-555d-4f96-aa83-8dab48d566d8" />
-
+<img width="1853" height="1246" alt="截图原位翻译效果" src="https://github.com/user-attachments/assets/b284b6cc-0bc3-4352-93cc-39c31e81ee66" />
+<img width="1828" height="1271" alt="截图原位翻译效果" src="https://github.com/user-attachments/assets/c54f7cb6-555d-4f96-aa83-8dab48d566d8" />
 
 ### 自动输入翻译
 
@@ -52,6 +53,10 @@
 ## 开发与许可
 
 源码位于 `pot-desktop/`。本地构建使用 `pot-desktop/.scripts/build-local.ps1`，中文版 MSI 使用 `pot-desktop/.scripts/build-msi.ps1`。前端验证：在 `pot-desktop/` 下运行 `pnpm test`。
+
+- [模块结构与接口约定](docs/ARCHITECTURE.md)
+- [开发环境与回归验证](docs/DEVELOPMENT.md)
+- [构建、校验与 GitHub Release 发布](docs/RELEASING.md)
 
 仅维护和发布简体中文版，翻译语言仍支持多语种。详细更新、安装说明及已知限制请查看各版本 [Release 页面](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases)。
 

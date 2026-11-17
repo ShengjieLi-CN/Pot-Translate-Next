@@ -1,8 +1,12 @@
-param([string]$Version = '3.2.2')
+param([string]$Version)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$package = Get-Content -LiteralPath (Join-Path $repoRoot 'pot-desktop/package.json') -Raw | ConvertFrom-Json
+if (-not $Version) { $Version = $package.version }
+if ($Version -ne $package.version) { throw 'Requested MSI version differs from package.json.' }
 $bundleDir = Join-Path $repoRoot 'pot-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi'
 $releaseDir = Join-Path $repoRoot 'release'
+New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 $builtExe = Join-Path $repoRoot 'pot-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/Pot Translate Next.exe'
 $source = Join-Path $bundleDir "Pot Translate Next_${Version}_x64_zh-CN.msi"
 $name = "Pot.Translate.Next_${Version}_x64_zh-CN.msi"
@@ -27,6 +31,8 @@ $language = Read-MsiProperty $database 'ProductLanguage'
 $upgradeCode = Read-MsiProperty $database 'UpgradeCode'
 $template = $database.SummaryInformation(0).Property(7)
 if ($product -ne 'Pot Translate Next' -or $productVersion -ne $Version -or $language -ne '2052' -or $template -notlike 'x64;*') { throw 'MSI product/version/language/architecture mismatch.' }
+# Keep upgrades compatible even on a clean checkout without an older installer.
+if ($upgradeCode -ne '{36A5331F-FAC7-5F96-BA61-A293AAB740A7}') { throw 'MSI upgrade identity mismatch.' }
 $previous = Join-Path $releaseDir 'Pot Translate Next_3.1.0_x64_zh-CN.msi'
 if (Test-Path -LiteralPath $previous) {
     $oldDatabase = $installer.OpenDatabase($previous, 0)
@@ -54,6 +60,8 @@ $exeHash = (Get-FileHash -LiteralPath $builtExe -Algorithm SHA256).Hash
 if ((Get-FileHash -LiteralPath $extracted[0].FullName -Algorithm SHA256).Hash -ne $exeHash) { throw 'Embedded executable differs from the verified build.' }
 $hash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
 $report = [ordered]@{ file = $name; version = $productVersion; product = $product; language = $language; template = $template; upgradeCode = $upgradeCode; productCode = (Read-MsiProperty $database 'ProductCode'); bytes = (Get-Item -LiteralPath $output).Length; sha256 = $hash; embeddedExeSha256 = $exeHash; embeddedFiles = $files }
-$report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $releaseDir "verification-${Version}.json") -Encoding utf8
-"$hash  $name" | Set-Content -LiteralPath (Join-Path $releaseDir "SHA256SUMS-${Version}.txt") -Encoding ascii
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$json = (($report | ConvertTo-Json -Depth 6) -replace "`r`n", "`n") + "`n"
+[IO.File]::WriteAllText((Join-Path $releaseDir "verification-${Version}.json"), $json, $utf8)
+[IO.File]::WriteAllText((Join-Path $releaseDir "SHA256SUMS-${Version}.txt"), "$hash  $name`n", $utf8)
 $report | ConvertTo-Json -Depth 6

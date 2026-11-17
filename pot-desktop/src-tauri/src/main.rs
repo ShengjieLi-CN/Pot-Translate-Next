@@ -13,7 +13,6 @@ mod live_audio;
 mod screenshot;
 mod selection_translate;
 mod server;
-mod system_ocr;
 mod tray;
 mod updater;
 mod window;
@@ -31,7 +30,6 @@ use once_cell::sync::OnceCell;
 use screenshot::{screenshot, screenshot_translate_mode};
 use server::*;
 use std::sync::Mutex;
-use system_ocr::*;
 use tauri::api::notification::Notification;
 use tauri::Manager;
 use tauri_plugin_log::LogTarget;
@@ -159,8 +157,6 @@ fn main() {
             cut_image,
             get_base64,
             copy_img,
-            system_ocr,
-            system_ocr_layout,
             screenshot_translate_mode,
             window::start_screenshot_translate,
             set_proxy,

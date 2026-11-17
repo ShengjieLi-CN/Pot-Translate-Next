@@ -1,7 +1,7 @@
 {
     "name": "pot",
     "private": true,
-    "version": "3.3.4",
+    "version": "3.3.5",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -10,7 +10,8 @@
         "preview": "vite preview",
         "tauri": "tauri",
         "updater": "node updater/updater.mjs",
-        "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs"
+        "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs",
+        "test:ui:ocr": "node .scripts/verify-paddle-screenshot-ui.cjs && node .scripts/verify-screenshot-ui.cjs && node .scripts/verify-complex-screenshot-ui.cjs && node .scripts/verify-bullet-screenshot-ui.cjs"
     },
     "dependencies": {
         "@nextui-org/react": "^2.4.8",
@@ -23,7 +24,6 @@
         "i18next": "^23.16.4",
         "jose": "^5.9.6",
         "jotai": "^2.10.1",
-        "jsqr": "^1.4.0",
         "md5": "^2.3.0",
         "nanoid": "^5.0.8",
         "next-themes": "^0.3.0",
@@ -43,7 +43,6 @@
         "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
         "tauri-plugin-sql-api": "github:tauri-apps/tauri-plugin-sql#v1",
         "tauri-plugin-store-api": "github:tauri-apps/tauri-plugin-store#v1",
-        "tesseract.js": "^5.1.1",
         "uuid": "^11.0.2"
     },
     "devDependencies": {

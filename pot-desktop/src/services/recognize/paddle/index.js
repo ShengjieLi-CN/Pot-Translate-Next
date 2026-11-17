@@ -1,6 +1,6 @@
 import { fetch, Body } from '@tauri-apps/api/http';
 import { store } from '../../../utils/store';
-import { requestPaddleOcr, createPaddleRecognizer } from '../../../utils/paddle_ocr.mjs';
+import { requestPaddleOcr, createPaddleRecognizer, formatRecognizedText } from '../../../utils/paddle_ocr.mjs';
 
 export async function preparePaddleImage(base64) {
     const image = new Image();
@@ -36,6 +36,6 @@ export async function recognizeLayout(base64, _language, options = {}) {
     return recognizeCached(base64, config, options.isCurrent);
 }
 
-export async function recognize(base64, language, options) {
-    return (await recognizeLayout(base64, language, options)).text;
+export async function recognize(base64, language, options = {}) {
+    return formatRecognizedText((await recognizeLayout(base64, language, options)).text, options.joinLines);
 }
