@@ -39,14 +39,14 @@
 ## 开始使用
 
 1. 从 [Releases](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) 下载简体中文 MSI；校验文件随安装包提供。
-2. 在“服务设置”配置翻译、OCR 或离线引擎；同声传译在对应页面配置 STT。
+2. 在“服务设置”配置翻译或离线引擎；在“文字识别”选择 Paddle OCR 云端模型并填写 AI Studio 访问令牌；同声传译在对应页面配置 STT。
 3. 在“热键设置”配置截图及划词快捷键，划词开关与服务选项位于“翻译设置”。
 
 ## 推荐配置
 
 1. 翻译：Google翻译+腾讯交互翻译（插件）+硅基流动翻译插件
-2. OCR：推荐使用Paddle OCR插件，效果更佳
-3. 以上插件除了硅基流动翻译插件均可以在pot translate插件官网找到
+2. OCR：内置 Paddle OCR 官方云端服务，支持 PP-OCRv5（截图推荐）、PP-OCRv6、PP-OCRv5-latin；不再使用 OCR 插件或本地部署。
+3. 翻译插件可在 pot translate 插件官网查找。
 4. 云端服务需要自行提供凭据，发布文件不含个人配置。窗口材质取决于 Windows 支持情况；首次安装运行时或离线模型可能需要联网。
 
 ## 开发与许可

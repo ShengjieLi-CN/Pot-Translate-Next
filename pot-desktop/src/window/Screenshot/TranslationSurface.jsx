@@ -7,7 +7,8 @@ import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
 import { getServiceName, whetherPluginService } from '../../utils/service_instance';
 import { invoke_plugin } from '../../utils/invoke_plugin';
-import * as recognizeServices from '../../services/recognize';
+import { recognizeLayout } from '../../services/recognize/paddle';
+import { DEFAULT_PADDLE_CONFIG } from '../../utils/paddle_ocr.mjs';
 import * as translateServices from '../../services/translate';
 import detect from '../../utils/lang_detect';
 import {
@@ -19,7 +20,6 @@ import {
 } from '../../utils/screenshot_translation.mjs';
 import './style.css';
 import { screenshotBackground } from '../../utils/screenshot_layout.mjs';
-import { recognizeScreenshotPlugin } from '../../services/screenshot_recognition';
 
 const defaultTranslations = ['deepl', 'bing', 'lingva', 'yandex', 'google', 'ecdict'];
 const promptServices = ['openai', 'ollama', 'chatglm', 'geminipro'];
@@ -42,7 +42,7 @@ async function loadService(type, key) {
             plugin: true,
         };
     }
-    const service = (type === 'translate' ? translateServices : recognizeServices)[name];
+    const service = translateServices[name];
     if (!service || (type === 'translate' && dictionaries.includes(name))) return null;
     return { ...service, key, name, config };
 }
@@ -99,13 +99,11 @@ function FittedBlock({ block, width, height, scale, colors }) {
 export default function TranslationSurface({ capture, onRecapture, onClose, floating = false }) {
     const { t } = useTranslation();
     const [translateKeys] = useConfig('translate_service_list', defaultTranslations);
-    const [recognizeKeys] = useConfig('recognize_service_list', ['system', 'tesseract']);
-    const [recognizeLanguage] = useConfig('recognize_language', 'auto');
+    const [paddleConfig] = useConfig('paddle_ocr', DEFAULT_PADDLE_CONFIG);
     const [target, setTarget] = useConfig('screenshot_target_language', 'zh_cn');
     const [source, setSource] = useState('auto');
     const [services, setServices] = useState(null);
     const [translator, setTranslator] = useState('');
-    const [recognizer, setRecognizer] = useState('');
     const [blocks, setBlocks] = useState([]);
     const [domain, setDomain] = useState('general');
     const [original, setOriginal] = useState(false);
@@ -120,31 +118,34 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
     const [controlsPosition, setControlsPosition] = useState({ left: 12, top: 12 });
     const [scale, setScale] = useState(1);
     const [pixels, setPixels] = useState(null);
+    const pixelsRequest = useRef(null);
 
     useEffect(() => {
         let disposed = false;
         setPixels(null);
         const image = new Image();
         image.src = `data:image/png;base64,${capture.base64}`;
-        image
+        const request = image
             .decode()
             .then(() => {
-                if (disposed) return;
                 const canvas = document.createElement('canvas');
                 canvas.width = capture.width;
                 canvas.height = capture.height;
                 const context = canvas.getContext('2d', { willReadFrequently: true });
                 context.drawImage(image, 0, 0, capture.width, capture.height);
-                setPixels(context.getImageData(0, 0, capture.width, capture.height).data);
+                const data = context.getImageData(0, 0, capture.width, capture.height).data;
+                if (!disposed) setPixels(data);
+                return data;
             })
-            .catch(() => {});
+            .catch(() => null);
+        pixelsRequest.current = { capture, request };
         return () => {
             disposed = true;
         };
     }, [capture]);
 
     useEffect(() => {
-        if (!translateKeys || !recognizeKeys) return;
+        if (!translateKeys) return;
         let disposed = false;
         const load = async () => {
             const failures = [];
@@ -161,26 +162,16 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                         })
                     )
                 ).filter(Boolean);
-            const [translate, recognize] = await Promise.all([
-                loadList('translate', translateKeys),
-                loadList('recognize', recognizeKeys),
-            ]);
-            const [savedTranslator, savedRecognizer] = await Promise.all([
-                store.get('screenshot_translate_service'),
-                store.get('screenshot_recognize_service'),
-            ]);
+            const translate = await loadList('translate', translateKeys);
+            const savedTranslator = await store.get('screenshot_translate_service');
             if (disposed) return;
-            setServices({ translate, recognize });
+            setServices({ translate });
             setTranslator(
                 (old) =>
                     translate.find((s) => s.key === old || s.key === savedTranslator)?.key ||
                     translate.find((s) => promptServices.includes(s.name))?.key ||
                     translate[0]?.key ||
                     ''
-            );
-            setRecognizer(
-                (old) =>
-                    recognize.find((s) => s.key === old || s.key === savedRecognizer)?.key || recognize[0]?.key || ''
             );
             setNotice(failures.join('\n'));
         };
@@ -193,46 +184,34 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
         return () => {
             disposed = true;
         };
-    }, [translateKeys, recognizeKeys, resourceRetry]);
+    }, [translateKeys, resourceRetry]);
 
     useEffect(() => {
-        if (!services || !capture || !target || recognizeLanguage === null) return;
+        if (!services || !capture || !target || paddleConfig === null) return;
         const current = ++revision.current;
         const isCurrent = () => revision.current === current;
         setError('');
         setBlocks([]);
         setOriginal(false);
-        if (!translator || !recognizer) {
+        if (!translator) {
             setStatus('empty');
             return;
         }
         const run = async () => {
-            const ocr = services.recognize.find((s) => s.key === recognizer);
             const service = services.translate.find((s) => s.key === translator);
-            if (!ocr || !service) return;
-            const ocrLanguage = source === 'auto' ? recognizeLanguage : source;
-            if (!(ocrLanguage in ocr.Language)) throw new Error(t('screenshot.unsupported_ocr'));
-            const cacheKey = `${capture.id}:${recognizer}:${ocrLanguage}`;
+            if (!service) return;
+            const cacheKey = capture.id;
+            // Object identity invalidates the cache on credential/model changes without embedding the key.
+            if (ocrCache.current?.config !== paddleConfig) ocrCache.current = null;
             let recognized = ocrCache.current?.key === cacheKey ? ocrCache.current.blocks : null;
             if (!recognized) {
                 setStatus('recognizing');
-                let result;
-                if (ocr.plugin) {
-                    result = await recognizeScreenshotPlugin(
-                        ocr,
-                        capture,
-                        ocr.Language[ocrLanguage],
-                        isCurrent,
-                        ocrLanguage === 'auto'
-                    );
-                } else {
-                    result = await (ocr.recognizeLayout || ocr.recognize)(capture.base64, ocr.Language[ocrLanguage], {
-                        config: ocr.config,
-                    });
-                }
+                const image = pixelsRequest.current?.capture === capture ? pixelsRequest.current.request : null;
+                const result = await recognizeLayout(capture.base64, 'auto', { config: paddleConfig, isCurrent });
+                const originalPixels = await image;
                 if (!isCurrent()) return;
-                recognized = screenshotBlocks(result, capture.width, capture.height);
-                ocrCache.current = { key: cacheKey, blocks: recognized };
+                recognized = screenshotBlocks(result, capture.width, capture.height, originalPixels);
+                if (recognized.length) ocrCache.current = { key: cacheKey, config: paddleConfig, blocks: recognized };
             }
             if (!recognized.length) throw new Error(t('screenshot.no_text'));
             const context = recognized.map((b) => b.text).join('\n\n');
@@ -271,7 +250,8 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                 },
                 {
                     isCurrent,
-                    onUpdate: (translated) => setBlocks([...translated, ...recognized.slice(translated.length)]),
+                    concurrency: 3,
+                    onUpdate: setBlocks,
                 }
             );
             if (isCurrent()) setStatus('done');
@@ -285,7 +265,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
         return () => {
             revision.current++;
         };
-    }, [capture, services, recognizer, translator, target, source, recognizeLanguage, t]);
+    }, [capture, services, translator, target, source, paddleConfig, t]);
 
     useEffect(() => {
         const node = surfaceRef.current;
@@ -437,17 +417,12 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                                 remember('screenshot_translate_service', key);
                             }
                         )}
-                    {services &&
-                        select(
-                            t('screenshot.ocr_service'),
-                            recognizer,
-                            services.recognize.map((s) => [s.key, serviceName(s, 'recognize')]),
-                            (key) => {
-                                ocrCache.current = null;
-                                setRecognizer(key);
-                                remember('screenshot_recognize_service', key);
-                            }
-                        )}
+                    <span
+                        className='text-sm'
+                        title='在文字识别设置中配置模型与 API Key'
+                    >
+                        Paddle OCR
+                    </span>
                     <button
                         onClick={() => setOriginal(!original)}
                         aria-pressed={original}
@@ -475,7 +450,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                     <button
                         onClick={() => {
                             revision.current++;
-                            ocrCache.current = null;
+                            // Translation retries reuse the already recognized crop.
                             setServices(null);
                             setStatus('loading');
                             setResourceRetry((n) => n + 1);

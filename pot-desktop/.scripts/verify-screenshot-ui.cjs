@@ -64,7 +64,8 @@ async function installMock(page, options = {}) {
                 app_theme: 'light',
                 translate_detect_engine: 'local',
                 translate_service_list: options.noService ? [] : ['openai@test', 'openai@second'],
-                recognize_service_list: ['system'],
+                recognize_service_list: ['system', 'plugin.com.pot-app.paddle@legacy'],
+                paddle_ocr: { model: 'PP-OCRv6', apiKey: 'fake-paddle-key' },
                 recognize_language: 'auto',
                 'openai@test': {
                     service: 'openai',
@@ -211,7 +212,46 @@ async function installMock(page, options = {}) {
                         else if (module === 'Fs' && message.cmd === 'exists') result = false;
                         else if (module === 'Http') {
                             if (message.cmd === 'createClient') result = 1;
-                            else if (message.cmd === 'httpRequest') {
+                            else if (
+                                message.cmd === 'httpRequest' &&
+                                message.options.url.includes('paddleocr.aistudio-app.com')
+                            ) {
+                                const data =
+                                    message.options.method === 'POST'
+                                        ? { data: { jobId: 'mock-ocr-job' } }
+                                        : {
+                                              data: {
+                                                  state: 'done',
+                                                  resultUrl: { jsonUrl: 'https://paddle-result.invalid/result.jsonl' },
+                                              },
+                                          };
+                                result = { status: 200, headers: {}, data: JSON.stringify(data) };
+                            } else if (
+                                message.cmd === 'httpRequest' &&
+                                message.options.url.includes('paddle-result.invalid')
+                            ) {
+                                const rec_texts = options.noText
+                                    ? []
+                                    : options.textOnly
+                                      ? ['Abstract\n\nRNA structure prediction.\n\nMethods']
+                                      : paragraphs.map(([text]) => text);
+                                const rec_boxes =
+                                    options.textOnly || options.noText
+                                        ? []
+                                        : paragraphs.map(([, x, y, width, height]) => [
+                                              (x * cropWidth) / 870,
+                                              (y * cropHeight) / 300,
+                                              ((x + width) * cropWidth) / 870,
+                                              ((y + height) * cropHeight) / 300,
+                                          ]);
+                                result = {
+                                    status: 200,
+                                    headers: {},
+                                    data: JSON.stringify({
+                                        result: { ocrResults: [{ prunedResult: { rec_texts, rec_boxes } }] },
+                                    }),
+                                };
+                            } else if (message.cmd === 'httpRequest') {
                                 const text = message.options.body.payload.messages.at(-1).content;
                                 const delay = window.__fixture.delay;
                                 if (delay) await new Promise((r) => setTimeout(r, delay));
@@ -260,9 +300,11 @@ if (require.main === module)
         await page.mouse.up();
         await page.getByText('翻译完成', { exact: false }).waitFor();
         assert.match(await page.locator('.screenshot-paper').innerText(), /从头RNA结构预测/);
-        assert.equal(await page.locator('.screenshot-block').count(), 7);
+        assert.equal(await page.locator('.screenshot-block').count(), 6);
         const requests = await page.evaluate(() =>
-            window.__fixture.calls.filter((c) => c.message?.cmd === 'httpRequest')
+            window.__fixture.calls.filter(
+                (c) => c.message?.cmd === 'httpRequest' && c.message.options.url.includes('translation.invalid')
+            )
         );
         assert.ok(
             requests.every((r) => r.message.options.body.payload.messages[0].content.includes('从头RNA结构预测'))

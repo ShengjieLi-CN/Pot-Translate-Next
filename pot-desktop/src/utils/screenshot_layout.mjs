@@ -1,3 +1,5 @@
+import { screenshotBulletStarts } from './screenshot_markers.mjs';
+
 // Geometry always uses original crop pixels, never CSS pixels or OCR enlargement.
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 16;
 const heading = (text) =>
@@ -64,7 +66,72 @@ function numberedListFragments(fragments, width) {
     return [...fragments.filter(f=>!used.has(f)),...output];
 }
 
-export function layoutScreenshotBlocks(result, width, height, restore) {
+// Repeated narrow whitespace lanes are real column gutters even when they are
+// smaller than the font-based word-joining threshold (common in zoomed PDFs).
+function columnGutters(fragments) {
+    const gaps = [];
+    for (const left of fragments) {
+        for (const right of fragments) {
+            const size = Math.min(left.fontHeight, right.fontHeight);
+            const start = left.box.x + left.box.width, end = right.box.x;
+            if (end - start < Math.max(10, size * 0.6) || left.box.width < size * 6 || right.box.width < size * 6 ||
+                Math.abs(left.box.y - right.box.y) > size * 0.6) continue;
+            gaps.push({ start, end, y: Math.min(left.box.y, right.box.y), size });
+        }
+    }
+    const gutters = [];
+    for (const gap of gaps) {
+        const x = (gap.start + gap.end) / 2;
+        if (gutters.some((g) => Math.abs(g.x - x) < gap.size * 0.5)) continue;
+        const rows = gaps.filter((g) => g.start <= x && g.end >= x);
+        const top = Math.min(...rows.map((g) => g.y)), bottom = Math.max(...rows.map((g) => g.y));
+        if (rows.length >= 3 && bottom - top > gap.size * 2) gutters.push({ x, top: top - gap.size, bottom: bottom + gap.size });
+    }
+    return gutters;
+}
+
+// Paddle often omits small bullet glyphs. Learn the normal line pitch in each
+// aligned text lane so the slightly larger gap between slide items still counts
+// as a paragraph break. Use row centres: bold text and descenders change ink-box
+// heights enough that the empty gap alone is unreliable.
+function paragraphStarts(lines) {
+    const bullet = (text) => /^[•●▪◦‣⁃·](?:\s|$)/u.test(text.trim());
+    const center = (line) => line.box.y + line.box.height / 2;
+    const sameLane = (a, b) =>
+        Math.abs(a.box.x - b.box.x) <= Math.min(a.fontHeight, b.fontHeight) * 0.65 &&
+        Math.max(a.fontHeight, b.fontHeight) <= Math.min(a.fontHeight, b.fontHeight) * 1.35 &&
+        Math.min(a.box.x + a.box.width, b.box.x + b.box.width) - Math.max(a.box.x, b.box.x) >=
+            Math.min(a.box.width, b.box.width) * 0.5;
+    const pairs = lines.flatMap((previous) => {
+        const next = lines.filter((line) => sameLane(previous, line) &&
+            line.box.y >= previous.box.y + previous.box.height - previous.fontHeight * 0.15)
+            .sort((a, b) => a.box.y - b.box.y)[0];
+        if (!next) return [];
+        const pitch = center(next) - center(previous);
+        return pitch <= Math.min(previous.fontHeight, next.fontHeight) * 2 ? [{ previous, next, pitch }] : [];
+    });
+    const starts = new Set(lines.filter((line) => bullet(line.text)));
+    for (const { previous, next, pitch } of pairs) {
+        if (!/[.!?。！？][”’"')\]]?\s*$/.test(previous.text) || previous.listItem || next.listItem) continue;
+        const nearby = pairs.filter((pair) => sameLane(previous, pair.previous) &&
+            Math.abs(center(previous) - center(pair.previous)) < previous.fontHeight * 20);
+        if (nearby.length < 4) continue;
+        const typicalPitch = median(nearby.map((pair) => pair.pitch));
+        if (pitch > typicalPitch * 1.12 && pitch - typicalPitch > previous.fontHeight * 0.12)
+            starts.add(next);
+    }
+    // A detected marker can be a separate, much smaller OCR box than its text.
+    for (const marker of lines.filter((line) => /^[•●▪◦‣⁃·]$/u.test(line.text.trim()))) {
+        const body = lines.filter((line) => line.box.x > marker.box.x + marker.box.width &&
+            line.box.x - marker.box.x - marker.box.width < line.fontHeight * 3 &&
+            Math.abs(center(line) - center(marker)) < line.fontHeight * 0.6)
+            .sort((a, b) => a.box.x - b.box.x)[0];
+        if (body) starts.add(body);
+    }
+    return starts;
+}
+
+export function layoutScreenshotBlocks(result, width, height, restore, pixels) {
     const sx = width / (Number(result.width) || width),
         sy = height / (Number(result.height) || height);
     const mapBox = (b) => (valid(b) ? { x: b.x * sx, y: b.y * sy, width: b.width * sx, height: b.height * sy } : null);
@@ -146,6 +213,7 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
     }
     // Overlapping tiles may return partial copies of the same row. Rejoin only
     // fragments on the same baseline with ordinary inter-word spacing.
+    const gutters = columnGutters(fragments);
     const lines = [];
     for (const fragment of numberedListFragments(fragments, width).sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x)) {
         const previous = lines.find(
@@ -155,13 +223,17 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
                 fragment.box.x - l.box.x - l.box.width < Math.min(l.fontHeight, fragment.fontHeight) * 1.5 &&
                 Math.abs(l.fontHeight - fragment.fontHeight) < l.fontHeight * 0.3 &&
                 l.paragraph === fragment.paragraph &&
-                l.listItem === fragment.listItem
+                l.listItem === fragment.listItem &&
+                !gutters.some((g) => g.x > l.box.x + l.box.width && g.x < fragment.box.x &&
+                    fragment.box.y >= g.top && fragment.box.y <= g.bottom)
         );
         if (previous) {
             previous.text += ` ${fragment.text}`;
             previous.box = unionBox([previous, fragment]);
         } else lines.push({ ...fragment });
     }
+    const starts = paragraphStarts(lines);
+    for (const line of screenshotBulletStarts(lines, pixels, width, height)) starts.add(line);
     const typical = median(lines.map((l) => l.fontHeight)),
         groups = [];
     for (const line of lines) {
@@ -177,12 +249,14 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
                 /^\d{1,3}[.)、]?$/.test(last.text.trim()) ||
                 /^\d{1,3}[.)、]?$/.test(line.text.trim()) ||
                 last.listItem !== line.listItem ||
+                starts.has(line) ||
                 heading(last.text) ||
                 heading(line.text) ||
                 gap < -size * 0.15 ||
                 gap > size * 0.85 ||
                 Math.abs(last.fontHeight - line.fontHeight) > size * 0.3 ||
                 Math.abs(a.x - b.x) > size * 1.2 ||
+                (b.x - a.x > size * 0.65 && /[.!?。！？]\s*$/.test(last.text) && !line.listItem) ||
                 Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) < Math.min(a.width, b.width) * 0.5 ||
                 (line.paragraph != null && last.paragraph != null && line.paragraph !== last.paragraph)
             )
@@ -227,7 +301,8 @@ export function layoutScreenshotBlocks(result, width, height, restore) {
         const sorted = [...items].sort((a, b) => a.box.x - b.box.x);
         let right = sorted[0].box.x + sorted[0].box.width;
         for (let i = 1; i < sorted.length; i++) {
-            if (sorted[i].box.x - right > Math.max(12, typical * 1.5))
+            if (sorted[i].box.x - right > Math.max(12, typical * 1.5) ||
+                gutters.some((g) => g.x > right && g.x < sorted[i].box.x))
                 return [...order(sorted.slice(0, i)), ...order(sorted.slice(i))];
             right = Math.max(right, sorted[i].box.x + sorted[i].box.width);
         }

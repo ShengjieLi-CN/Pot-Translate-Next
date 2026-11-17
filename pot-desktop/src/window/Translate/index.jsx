@@ -80,7 +80,6 @@ export default function Translate() {
         'google',
         'ecdict',
     ]);
-    const [recognizeServiceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['lingva_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
@@ -167,7 +166,7 @@ export default function Translate() {
     }, [rememberWindowSize]);
 
     const loadPluginList = async () => {
-        const serviceTypeList = ['translate', 'tts', 'recognize', 'collection'];
+        const serviceTypeList = ['translate', 'tts', 'collection'];
         let temp = {};
         for (const serviceType of serviceTypeList) {
             temp[serviceType] = {};
@@ -205,9 +204,6 @@ export default function Translate() {
         for (const serviceInstanceKey of translateServiceInstanceList) {
             config[serviceInstanceKey] = (await store.get(serviceInstanceKey)) ?? {};
         }
-        for (const serviceInstanceKey of recognizeServiceInstanceList) {
-            config[serviceInstanceKey] = (await store.get(serviceInstanceKey)) ?? {};
-        }
         for (const serviceInstanceKey of ttsServiceInstanceList) {
             config[serviceInstanceKey] = (await store.get(serviceInstanceKey)) ?? {};
         }
@@ -219,18 +215,12 @@ export default function Translate() {
     useEffect(() => {
         if (
             translateServiceInstanceList !== null &&
-            recognizeServiceInstanceList !== null &&
             ttsServiceInstanceList !== null &&
             collectionServiceInstanceList !== null
         ) {
             loadServiceInstanceConfigMap();
         }
-    }, [
-        translateServiceInstanceList,
-        recognizeServiceInstanceList,
-        ttsServiceInstanceList,
-        collectionServiceInstanceList,
-    ]);
+    }, [translateServiceInstanceList, ttsServiceInstanceList, collectionServiceInstanceList]);
 
     return (
         pluginList && (

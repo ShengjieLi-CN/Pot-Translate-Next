@@ -7,129 +7,55 @@ import { CgSpaceBetween } from 'react-icons/cg';
 import { MdContentCopy } from 'react-icons/md';
 import { MdSmartButton } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
-import { nanoid } from 'nanoid';
 
-import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../utils/service_instance';
-import { currentServiceInstanceKeyAtom, languageAtom, recognizeFlagAtom } from '../ControlArea';
-import { invoke_plugin } from '../../../utils/invoke_plugin';
-import * as builtinServices from '../../../services/recognize';
+import { recognizeFlagAtom } from '../ControlArea';
 import { useConfig } from '../../../hooks';
+import { recognize } from '../../../services/recognize/paddle';
+import { DEFAULT_PADDLE_CONFIG } from '../../../utils/paddle_ocr.mjs';
 import { base64Atom } from '../ImageArea';
-import { pluginListAtom } from '..';
 
 export const textAtom = atom();
-let recognizeId = 0;
 
-export default function TextArea(props) {
-    const { serviceInstanceConfigMap } = props;
+export default function TextArea() {
+    const [paddleConfig] = useConfig('paddle_ocr', DEFAULT_PADDLE_CONFIG);
     const [autoCopy] = useConfig('recognize_auto_copy', false);
     const [deleteNewline] = useConfig('recognize_delete_newline', false);
     const [hideWindow] = useConfig('recognize_hide_window', false);
     const recognizeFlag = useAtomValue(recognizeFlagAtom);
-    const currentServiceInstanceKey = useAtomValue(currentServiceInstanceKeyAtom);
-    const language = useAtomValue(languageAtom);
     const base64 = useAtomValue(base64Atom);
     const [loading, setLoading] = useState(false);
     const [text, setText] = useAtom(textAtom);
     const [error, setError] = useState('');
-    const pluginList = useAtomValue(pluginListAtom);
     const { t } = useTranslation();
 
     useEffect(() => {
+        let current = true;
         setText('');
         setError('');
-        if (
-            base64 !== '' &&
-            currentServiceInstanceKey &&
-            autoCopy !== null &&
-            deleteNewline !== null &&
-            hideWindow !== null
-        ) {
+        setLoading(false);
+        if (base64 && paddleConfig !== null && autoCopy !== null && deleteNewline !== null && hideWindow !== null) {
             setLoading(true);
-            if (getServiceSouceType(currentServiceInstanceKey) === ServiceSourceType.PLUGIN) {
-                if (language in pluginList[getServiceName(currentServiceInstanceKey)].language) {
-                    let id = nanoid();
-                    recognizeId = id;
-                    const pluginConfig = serviceInstanceConfigMap[currentServiceInstanceKey] ?? {};
-
-                    invoke_plugin('recognize', getServiceName(currentServiceInstanceKey)).then(([func, utils]) => {
-                        func(base64, pluginList[getServiceName(currentServiceInstanceKey)].language[language], {
-                            config: pluginConfig,
-                            utils,
-                        }).then(
-                            (v) => {
-                                if (recognizeId !== id) return;
-                                v = v.trim();
-                                if (deleteNewline) {
-                                    v = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
-                                }
-                                setText(v);
-                                setLoading(false);
-                                if (autoCopy) {
-                                    writeText(v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({
-                                                title: t('common.write_clipboard'),
-                                                body: v,
-                                            });
-                                        }
-                                    });
-                                }
-                            },
-                            (e) => {
-                                if (recognizeId !== id) return;
-                                setError(e.toString());
-                                setLoading(false);
-                            }
-                        );
-                    });
-                }
-            } else {
-                const instanceConfig = serviceInstanceConfigMap[currentServiceInstanceKey] ?? {};
-                if (language in builtinServices[getServiceName(currentServiceInstanceKey)].Language) {
-                    let id = nanoid();
-                    recognizeId = id;
-                    builtinServices[getServiceName(currentServiceInstanceKey)]
-                        .recognize(
-                            base64,
-                            builtinServices[getServiceName(currentServiceInstanceKey)].Language[language],
-                            {
-                                config: instanceConfig,
-                            }
-                        )
-                        .then(
-                            (v) => {
-                                if (recognizeId !== id) return;
-                                v = v.trim();
-                                if (deleteNewline) {
-                                    v = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
-                                }
-                                setText(v);
-                                setLoading(false);
-                                if (autoCopy) {
-                                    writeText(v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({
-                                                title: t('common.write_clipboard'),
-                                                body: v,
-                                            });
-                                        }
-                                    });
-                                }
-                            },
-                            (e) => {
-                                if (recognizeId !== id) return;
-                                setError(e.toString());
-                                setLoading(false);
-                            }
-                        );
-                } else {
-                    setError('Language not supported');
-                    setLoading(false);
-                }
-            }
+            recognize(base64, 'auto', { config: paddleConfig, isCurrent: () => current })
+                .then(async (value) => {
+                    if (!current) return;
+                    const text = deleteNewline ? value.replace(/\-\s+/g, '').replace(/\s+/g, ' ').trim() : value.trim();
+                    setText(text);
+                    if (autoCopy && text) {
+                        await writeText(text);
+                        if (current && hideWindow) sendNotification({ title: t('common.write_clipboard'), body: text });
+                    }
+                })
+                .catch((error) => {
+                    if (current) setError(String(error));
+                })
+                .finally(() => {
+                    if (current) setLoading(false);
+                });
         }
-    }, [base64, currentServiceInstanceKey, language, recognizeFlag, autoCopy, deleteNewline, hideWindow]);
+        return () => {
+            current = false;
+        };
+    }, [base64, paddleConfig, recognizeFlag, autoCopy, deleteNewline, hideWindow]);
 
     return (
         <Card

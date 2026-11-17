@@ -1,4 +1,4 @@
-// Local synthetic email: real bundled English OCR, mocked native OCR/translation.
+// Synthetic email: mocked Paddle OCR cloud responses and translation.
 // No screenshot or text is sent to a network service.
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
@@ -22,12 +22,28 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
                     window[`_${request.callback}`](fixture.base64);
                     return;
                 }
-                if (fixture && request.cmd === 'system_ocr_layout') {
-                    fixture.receivedBase64 = request.base64;
-                    window[`_${request.callback}`](fixture.native);
+                const http = fixture && request.__tauriModule === 'Http' && request.message?.cmd === 'httpRequest';
+                if (http && request.message.options.url.includes('paddleocr.aistudio-app.com')) {
+                    if (request.message.options.method === 'POST') {
+                        const bytes = request.message.options.body.payload.file.file;
+                        fixture.receivedBase64 = btoa(bytes.map((byte) => String.fromCharCode(byte)).join(''));
+                    }
+                    return base(request);
+                }
+                if (http && request.message.options.url.includes('paddle-result.invalid')) {
+                    const rec_texts = fixture.ocr.lines.map((line) => line.text);
+                    const rec_boxes = fixture.ocr.lines.map((line) => {
+                        const { x, y, width, height } = line.words[0].box;
+                        return [x, y, x + width, y + height];
+                    });
+                    window[`_${request.callback}`]({
+                        status: 200,
+                        headers: {},
+                        data: JSON.stringify({ result: { ocrResults: [{ prunedResult: { rec_texts, rec_boxes } }] } }),
+                    });
                     return;
                 }
-                if (fixture && request.__tauriModule === 'Http' && request.message?.cmd === 'httpRequest') {
+                if (http) {
                     const source = request.message.options.body.payload.messages
                         .at(-1)
                         .content.split('content:\n')
@@ -77,16 +93,15 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
             window.__complex = {
                 base64: canvas.toDataURL('image/png').split(',')[1],
                 sources: [],
-                native: {
+                ocr: {
                     width: 800,
                     height: 520,
-                    englishAvailable: false,
                     lines: [
                         line('PACKAGES', 210, 44, 430, 58),
                         line('Delivery Reminder', 300, 137, 99, 12),
                         line('123456', 345, 192, 80, 20),
-                        line('This is a fri 院 reminder your parcel is read', 20, 252, 270, 10),
-                        line('Please show the code at reception', 20, 282, 255, 10),
+                        line('This is a friendly reminder. Your parcel is ready to collect.', 20, 252, 270, 10),
+                        line('Please show the collection code at the reception desk.', 20, 282, 255, 10),
                     ],
                 },
             };
@@ -104,9 +119,13 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
         await page.getByText('翻译完成', { exact: false }).waitFor({ timeout: 60000 });
         const fixture = await page.evaluate(() => ({
             sources: window.__complex.sources,
-            samePixels: window.__complex.receivedBase64 === window.__complex.base64,
+            samePixels:
+                document.querySelector('.screenshot-result img')?.src ===
+                'data:image/png;base64,' + window.__complex.base64,
+            compressed: window.__complex.receivedBase64.startsWith('/9j/'),
         }));
         assert.equal(fixture.samePixels, true);
+        assert.equal(fixture.compressed, true);
         assert.ok(fixture.sources.some((t) => /parcel is ready to collect/i.test(t)));
         assert.ok(fixture.sources.some((t) => /Please show the collection code at the reception desk/i.test(t)));
         assert.equal(
@@ -131,12 +150,13 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
                 true
             );
         }
-        if (process.env.COMPLEX_SCREENSHOT_PREVIEW) await page.screenshot({ path: process.env.COMPLEX_SCREENSHOT_PREVIEW });
+        if (process.env.COMPLEX_SCREENSHOT_PREVIEW)
+            await page.screenshot({ path: process.env.COMPLEX_SCREENSHOT_PREVIEW });
         await page.getByRole('button', { name: '查看原图', exact: true }).click();
         assert.equal(await page.locator('.screenshot-paper').count(), 0);
         assert.deepEqual(errors, []);
         console.log(
-            'Complex screenshot passed: real offline English fallback, small text beside large logos, immutable crop, 150% DPI, colour masks, preserved graphics and fitted text.'
+            'Complex screenshot passed: Paddle cloud response, small text beside large logos, immutable crop, 150% DPI, colour masks, preserved graphics and fitted text.'
         );
     } finally {
         await browser.close();

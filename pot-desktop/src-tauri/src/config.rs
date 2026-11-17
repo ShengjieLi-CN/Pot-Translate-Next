@@ -51,23 +51,6 @@ fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, k
 }
 
 pub fn check_service_available() -> Result<(), Error> {
-    let builtin_recognize_list: Vec<&str> = vec![
-        "baidu_ocr",
-        "baidu_accurate_ocr",
-        "baidu_img_ocr",
-        "iflytek_ocr",
-        "iflytek_intsig_ocr",
-        "iflytek_latex_ocr",
-        "qrcode",
-        "simple_latex_ocr",
-        "system",
-        "tencent_ocr",
-        "tencent_accurate_ocr",
-        "tencent_img_ocr",
-        "tesseract",
-        "volcengine_ocr",
-        "volcengine_multi_lang_ocr",
-    ];
     let builtin_translate_list: Vec<&str> = vec![
         "alibaba",
         "baidu",
@@ -95,18 +78,13 @@ pub fn check_service_available() -> Result<(), Error> {
     let builtin_tts_list: Vec<&str> = vec!["lingva_tts"];
     let builtin_collection_list: Vec<&str> = vec!["anki", "eudic"];
 
-    let plugin_recognize_list: Vec<String> = get_plugin_list("recognize").unwrap_or_default();
     let plugin_translate_list: Vec<String> = get_plugin_list("translate").unwrap_or_default();
     let plugin_tts_list: Vec<String> = get_plugin_list("tts").unwrap_or_default();
     let plugin_collection_list: Vec<String> = get_plugin_list("collection").unwrap_or_default();
-    if let Some(recognize_service_list) = get("recognize_service_list") {
-        let recognize_service_list: Vec<String> = serde_json::from_value(recognize_service_list)?;
-        check_available(
-            recognize_service_list,
-            builtin_recognize_list,
-            plugin_recognize_list,
-            "recognize_service_list",
-        );
+    // OCR has a single built-in cloud provider. Preserve old credentials on disk,
+    // but never use a restored legacy provider list to select an OCR implementation.
+    if get("recognize_service_list") != Some(json!(["paddle"])) {
+        set("recognize_service_list", vec!["paddle"]);
     }
     if let Some(translate_service_list) = get("translate_service_list") {
         let translate_service_list: Vec<String> = serde_json::from_value(translate_service_list)?;

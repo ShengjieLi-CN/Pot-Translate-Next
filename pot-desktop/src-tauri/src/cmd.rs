@@ -174,6 +174,11 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         } else {
             return Err(Error::Error("Invalid Plugin: miss info.json".into()));
         }
+        if plugin_type == "recognize" {
+            return Err(Error::Error(
+                "文字识别已统一为 Paddle OCR 云端服务，请在文字识别设置中配置模型和 API Key。".into(),
+            ));
+        }
         if zip.by_name("main.js").is_err() {
             return Err(Error::Error("Invalid Plugin: miss main.js".into()));
         }

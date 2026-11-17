@@ -18,7 +18,7 @@ import { splitSentences, bilingualLanguages } from '../../../../utils/sentence_a
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
-import * as recognizeServices from '../../../../services/recognize';
+import { recognize } from '../../../../services/recognize/paddle';
 import * as builtinTtsServices from '../../../../services/tts';
 import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
@@ -57,8 +57,6 @@ export default function SourceArea(props) {
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
-    const [recognizeLanguage] = useConfig('recognize_language', 'auto');
-    const [recognizeServiceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceList] = useConfig('tts_service_list', ['lingva_tts']);
     const [hideWindow] = useConfig('translate_hide_window', false);
     const [hideSource] = useConfig('hide_source', false);
@@ -91,83 +89,17 @@ export default function SourceArea(props) {
             requestAnimationFrame(() => textAreaRef.current?.focus());
         } else if (text === '[IMAGE_TRANSLATE]') {
             setWindowType('[IMAGE_TRANSLATE]');
-            const base64 = await invoke('get_base64');
-            const serviceInstanceKey = recognizeServiceList[0];
-            if (getServiceSouceType(serviceInstanceKey) === ServiceSourceType.PLUGIN) {
-                if (recognizeLanguage in pluginList['recognize'][getServiceName(serviceInstanceKey)].language) {
-                    const pluginConfig = serviceInstanceConfigMap[serviceInstanceKey];
-
-                    let [func, utils] = await invoke_plugin('recognize', getServiceName(serviceInstanceKey));
-                    func(
-                        base64,
-                        pluginList['recognize'][getServiceName(serviceInstanceKey)].language[recognizeLanguage],
-                        {
-                            config: pluginConfig,
-                            utils,
-                        }
-                    ).then(
-                        (v) => {
-                            let newText = v.trim();
-                            if (deleteNewline) {
-                                newText = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
-                            } else {
-                                newText = v.trim();
-                            }
-                            if (incrementalTranslate) {
-                                setSourceText((old) => {
-                                    return old + ' ' + newText;
-                                });
-                            } else {
-                                setSourceText(newText);
-                            }
-                            detect_language(newText).then(() => {
-                                syncSourceText();
-                            });
-                        },
-                        (e) => {
-                            setSourceText(e.toString());
-                        }
-                    );
-                } else {
-                    setSourceText('Language not supported');
-                }
-            } else {
-                if (recognizeLanguage in recognizeServices[getServiceName(serviceInstanceKey)].Language) {
-                    const instanceConfig = serviceInstanceConfigMap[serviceInstanceKey];
-                    recognizeServices[getServiceName(serviceInstanceKey)]
-                        .recognize(
-                            base64,
-                            recognizeServices[getServiceName(serviceInstanceKey)].Language[recognizeLanguage],
-                            {
-                                config: instanceConfig,
-                            }
-                        )
-                        .then(
-                            (v) => {
-                                let newText = v.trim();
-                                if (deleteNewline) {
-                                    newText = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
-                                } else {
-                                    newText = v.trim();
-                                }
-                                if (incrementalTranslate) {
-                                    setSourceText((old) => {
-                                        return old + ' ' + newText;
-                                    });
-                                } else {
-                                    setSourceText(newText);
-                                }
-                                detect_language(newText).then(() => {
-                                    syncSourceText();
-                                });
-                            },
-                            (e) => {
-                                setSourceText(e.toString());
-                            }
-                        );
-                } else {
-                    setSourceText('Language not supported');
-                }
+            const revision = sourceRevision.current;
+            try {
+                const base64 = await invoke('get_base64');
+                const value = await recognize(base64, 'auto', { isCurrent: () => revision === sourceRevision.current });
+                if (revision !== sourceRevision.current) return;
+                const newText = deleteNewline ? value.replace(/\-\s+/g, '').replace(/\s+/g, ' ').trim() : value.trim();
+                setSourceText((old) => (incrementalTranslate ? old + ' ' + newText : newText));
+                await detect_language(newText);
+                if (revision === sourceRevision.current) syncSourceText();
+            } catch (error) {
+                if (revision === sourceRevision.current) setSourceText(String(error));
             }
         } else {
             setWindowType('[SELECTION_TRANSLATE]');
@@ -295,18 +227,12 @@ export default function SourceArea(props) {
 
     useEffect(() => {
         if (embedded) return;
-        if (
-            deleteNewline !== null &&
-            incrementalTranslate !== null &&
-            recognizeLanguage !== null &&
-            recognizeServiceList !== null &&
-            hideWindow !== null
-        ) {
+        if (deleteNewline !== null && incrementalTranslate !== null && hideWindow !== null) {
             invoke('get_text').then((v) => {
                 handleNewText(v);
             });
         }
-    }, [deleteNewline, incrementalTranslate, recognizeLanguage, recognizeServiceList, hideWindow, embedded]);
+    }, [deleteNewline, incrementalTranslate, hideWindow, embedded]);
 
     useEffect(() => {
         setSourceDraft(sourceText);

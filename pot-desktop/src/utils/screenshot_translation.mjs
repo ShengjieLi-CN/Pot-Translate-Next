@@ -70,7 +70,7 @@ const isHeading = (text) =>
         text.trim()
     );
 
-export function screenshotBlocks(result, width, height) {
+export function screenshotBlocks(result, width, height, pixels) {
     if (typeof result === 'string' || !result?.lines?.length) {
         const text = restoreScreenshotText(typeof result === 'string' ? result : result?.text);
         if (!text) return [];
@@ -79,7 +79,7 @@ export function screenshotBlocks(result, width, height) {
             .split(/\n\n+/)
             .map((text, i) => ({ id: i, text, kind: isHeading(text) ? 'heading' : 'paragraph', box: null }));
     }
-    return layoutScreenshotBlocks(result, width, height, restoreScreenshotText);
+    return layoutScreenshotBlocks(result, width, height, restoreScreenshotText, pixels);
 }
 
 export function screenshotBlockSource(text, fallback) {
@@ -95,25 +95,44 @@ export function screenshotBlockSource(text, fallback) {
 export async function translateScreenshotBlocks(
     blocks,
     translate,
-    { isCurrent = () => true, onUpdate = () => {} } = {}
+    { isCurrent = () => true, onUpdate = () => {}, concurrency = 1 } = {}
 ) {
-    const output = [];
-    for (const block of blocks) {
-        if (!isCurrent()) return null;
-        // Collection codes, numbers and symbols must survive byte-for-byte.
-        const translated = !/\p{L}/u.test(block.text)
-            ? block.text
-            : await translate(block.text, (value) => {
-                  if (isCurrent() && typeof value === 'string') onUpdate([...output, { ...block, translation: value }]);
-              });
-        if (!isCurrent()) return null;
-        if (typeof translated !== 'string' || !translated.trim() || translated === '[STREAM]') {
-            throw new Error('Screenshot translation requires a text translation service.');
+    const output = blocks.map((block) => ({ ...block }));
+    let next = 0,
+        stopped = false;
+    const active = () => !stopped && isCurrent();
+    const publish = () => {
+        if (active()) onUpdate(output.map((block) => ({ ...block })));
+    };
+    const worker = async () => {
+        while (active() && next < blocks.length) {
+            const index = next++,
+                block = blocks[index];
+            try {
+                // Collection codes, numbers and symbols survive byte-for-byte.
+                const translated = !/\p{L}/u.test(block.text)
+                    ? block.text
+                    : await translate(block.text, (value) => {
+                          if (active() && typeof value === 'string') {
+                              output[index] = { ...block, translation: value };
+                              publish();
+                          }
+                      });
+                if (!active()) return;
+                if (typeof translated !== 'string' || !translated.trim() || translated === '[STREAM]') {
+                    throw new Error('Screenshot translation requires a text translation service.');
+                }
+                output[index] = { ...block, translation: translated.trim() };
+                publish();
+            } catch (error) {
+                stopped = true;
+                throw error;
+            }
         }
-        output.push({ ...block, translation: translated.trim() });
-        onUpdate([...output]);
-    }
-    return output;
+    };
+    const count = Math.min(blocks.length, Math.max(1, Math.min(4, Math.floor(concurrency) || 1)));
+    await Promise.all(Array.from({ length: count }, worker));
+    return isCurrent() ? output : null;
 }
 
 export function screenshotSelection(start, end, viewport, image) {

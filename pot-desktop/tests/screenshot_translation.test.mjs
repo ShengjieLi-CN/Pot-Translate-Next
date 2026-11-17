@@ -433,3 +433,104 @@ test('Paddle preserves uncertain numeric list anchors but still filters low-conf
     const raw=paddleScreenshotLayout(JSON.stringify({code:100,data:[item('6',0.27,10),item('7.',0.28,60),item('noise',0.2,100),item('9',0.05,140)]}),500,200);
     assert.deepEqual(raw.lines.map(l=>l.text),['6','7.']);
 });
+
+test('dense paper with a narrow repeated gutter retains column order and indented paragraph boundaries', () => {
+    const rows=[];
+    for(let i=0;i<13;i++) {
+        rows.push(line(`Left column row ${i}.`,35,22+i*41,982,37));
+        const indent=i===10?32:0;
+        rows.push(line(`Right column row ${i}.`,1053+indent,22+i*41,982-indent,37));
+    }
+    const blocks=screenshotBlocks({lines:rows},2128,603);
+    assert.equal(blocks.length,3);
+    assert.ok(blocks[0].text.includes('Left column row 12.'));
+    assert.ok(blocks[1].text.includes('Right column row 9.'));
+    assert.ok(blocks[2].text.startsWith('Right column row 10.'));
+    assert.ok(blocks.every(b=>b.box.width<1000));
+});
+
+// Geometry from the reported slide: Paddle detects the ten text rows but none
+// of its four bullet glyphs. The ink gaps alone vary from 2 to 23 pixels.
+const slideRows = [
+    ['Matplotlib is a Python library that provides flexible and', 101, 110, 1202, 51],
+    ['powerful tools for data visualisation.', 100, 167, 847, 54],
+    ['It can plot basic charts to advanced scientific', 99, 239, 1041, 50],
+    ['visualisations.', 101, 298, 338, 45],
+    ['Matplotlib works seamlessly with Pandas DataFrames,', 100, 366, 1250, 54],
+    ['allowing you to plot columns directly without extra data', 99, 424, 1175, 54],
+    ['preparation.', 98, 480, 270, 60],
+    ['Matplotlib also integrates with other scientific Python', 99, 551, 1206, 54],
+    ['libraries and external tools, making it a strong choice for', 99, 609, 1254, 53],
+    ['end-to-end analytical and reporting pipelines.', 101, 669, 969, 53],
+];
+
+test('slide with omitted bullets retains four complete items at original positions and different DPI', () => {
+    for (const scale of [0.5, 1, 1.5]) {
+        const lines = slideRows.map(([text, ...box]) => line(text, ...box.map(n => n * scale)));
+        const blocks = screenshotBlocks({ lines }, 1421 * scale, 859 * scale);
+        assert.deepEqual(blocks.map(b => b.text), [
+            slideRows.slice(0, 2), slideRows.slice(2, 4), slideRows.slice(4, 7), slideRows.slice(7),
+        ].map(rows => rows.map(row => row[0]).join(' ')));
+        assert.deepEqual(blocks.map(b => b.box.y / scale), [110, 239, 366, 551]);
+        assert.deepEqual(blocks.map(b => b.box.height / scale), [111, 104, 174, 171]);
+    }
+});
+
+test('regularly spaced sentences remain in a paragraph and modest gaps within a sentence do not split it', () => {
+    for (const rows of [
+        Array.from({ length: 8 }, (_, i) => line(`Sentence ${i}.`, 100, 20 + i * 30, 500, 24)),
+        [20, 50, 80, 120, 150, 180, 210].map((y, i) => line(`wrapped clause ${i}`, 100, y, 500, 24)),
+    ]) assert.equal(screenshotBlocks({ lines: rows }, 800, 400).length, 1);
+});
+
+test('paragraph spacing is learned within each column without splitting a neighboring regular paragraph', () => {
+    const left = slideRows.map(([text, ...box]) => line(text, ...box));
+    const right = Array.from({ length: 10 }, (_, i) => line(`Other column ${i}.`, 1500, 110 + i * 70, 1100, 54));
+    const blocks = screenshotBlocks({ lines: [...left, ...right] }, 2800, 900);
+    assert.equal(blocks.length, 5);
+    assert.equal(blocks.at(-1).text, right.map(row => row.text).join(' '));
+});
+
+test('explicit inline and separate bullet markers start a new item even without extra paragraph spacing', () => {
+    for (const separate of [false, true]) {
+        const lines = [line('First item', 100, 20, 300, 24), line('continues.', 100, 50, 250, 24)];
+        if (separate) lines.push(line('•', 60, 89, 8, 8));
+        lines.push(line(`${separate ? '' : '• '}Second item`, 100, 80, 300, 24));
+        lines.push(line('continues here.', 100, 110, 250, 24));
+        const blocks = screenshotBlocks({ lines }, 800, 300).filter(b => b.text !== '•');
+        assert.equal(blocks.length, 2);
+        assert.match(blocks[0].text, /^First item continues\.$/);
+        assert.match(blocks[1].text, /Second item[\s\S]*continues here\.$/);
+    }
+});
+
+test('bounded parallel translation publishes the correct block even when responses arrive out of order', async () => {
+    const blocks=screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.',500,300);
+    let active=0,maximum=0;
+    const finish=new Map(),updates=[];
+    const promise=translateScreenshotBlocks(blocks,async(text,stream)=>{
+        active++;maximum=Math.max(maximum,active);
+        await new Promise(resolve=>finish.set(text,resolve));
+        stream(`partial:${text}`);active--;return `translated:${text}`;
+    },{concurrency:3,onUpdate:value=>updates.push(value)});
+    assert.equal(finish.size,3);
+    finish.get('Two.')();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(updates[0][1].translation,'partial:Two.');
+    assert.equal(updates[0][0].translation,undefined);
+    finish.get('Four.')();finish.get('Three.')();finish.get('One.')();
+    const result=await promise;
+    assert.equal(maximum,3);
+    assert.deepEqual(result.map(b=>b.translation),blocks.map(b=>`translated:${b.text}`));
+});
+
+test('parallel translation stops launching work or publishing late results after a failure', async () => {
+    const blocks=screenshotBlocks('One.\n\nTwo.\n\nThree.\n\nFour.',500,300);
+    const finish=new Map();let calls=0,updates=0;
+    const promise=translateScreenshotBlocks(blocks,async(text,stream)=>{
+        calls++;await new Promise((resolve,reject)=>finish.set(text,{resolve,reject}));stream('late');return 'late';
+    },{concurrency:2,onUpdate:()=>updates++});
+    finish.get('One.').reject(new Error('offline'));
+    await assert.rejects(promise,/offline/);
+    finish.get('Two.').resolve();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(calls,2);assert.equal(updates,0);
+});
