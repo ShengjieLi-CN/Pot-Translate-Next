@@ -5,7 +5,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright')
 const { installMock } = require('./verify-screenshot-ui.cjs');
 
 (async () => {
-    const browser = await chromium.launch({ headless: true, executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
+    const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
     try {
         const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
         page.setDefaultTimeout(12000);

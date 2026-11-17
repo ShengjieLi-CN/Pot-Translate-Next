@@ -1,0 +1,18 @@
+{
+    "file":  "Pot.Translate.Next_3.3.5_x64_zh-CN.msi",
+    "version":  "3.3.5",
+    "product":  "Pot Translate Next",
+    "language":  "2052",
+    "template":  "x64;0",
+    "upgradeCode":  "{36A5331F-FAC7-5F96-BA61-A293AAB740A7}",
+    "productCode":  "{76B850EB-A20D-4AE3-98C8-CD5F638DF425}",
+    "bytes":  36110336,
+    "sha256":  "6CB3D5966B71C5B8F37A496EEBAF2531C27CB4F2368F42989BA23E25458C8BFC",
+    "embeddedExeSha256":  "C1A13881AE332363C02C78F818A724377A1B5ABC72F4AEF4B78FE5E65B47C694",
+    "embeddedFiles":  [
+                          {
+                              "bytes":  49729024,
+                              "name":  "-ddaenqh.exe|Pot Translate Next.exe"
+                          }
+                      ]
+}

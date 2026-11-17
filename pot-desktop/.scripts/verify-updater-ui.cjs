@@ -4,7 +4,7 @@ const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const { installMock } = require('./verify-screenshot-ui.cjs');
 (async () => {
- const browser = await chromium.launch({headless:true, executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+ const browser = await chromium.launch({headless:true, executablePath:process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe'});
  try {
   const page=await browser.newPage({viewport:{width:650,height:500}});
   const errors=[];page.on('pageerror', e=>errors.push(e.message));
