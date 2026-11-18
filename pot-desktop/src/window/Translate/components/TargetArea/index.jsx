@@ -1,3 +1,4 @@
+import { synthesizeSpeech } from '../../../../services/selection_speech';
 import {
     Card,
     CardBody,
@@ -12,7 +13,6 @@ import {
     Tooltip,
 } from '@nextui-org/react';
 import { BiCollapseVertical, BiExpandVertical } from 'react-icons/bi';
-import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import { sendNotification } from '@tauri-apps/api/notification';
 import React, { useEffect, useState, useRef } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
@@ -37,7 +37,6 @@ import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
-import * as builtinTtsServices from '../../../../services/tts';
 import { activeSentenceAtom, bilingualDirectionAtom, bilingualModeAtom, sourceDraftAtom } from '../../alignment';
 import { bilingualLanguages, joinTranslations, translateSentences } from '../../../../utils/sentence_alignment.mjs';
 
@@ -75,7 +74,6 @@ export default function TargetArea(props) {
 
     const [appFontSize] = useConfig('app_font_size', 16);
     const [collectionServiceList] = useConfig('collection_service_list', []);
-    const [ttsServiceList] = useConfig('tts_service_list', ['lingva_tts']);
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
     const [historyDisable] = useConfig('history_disable', false);
     const [isLoading, setIsLoading] = useState(false);
@@ -104,7 +102,6 @@ export default function TargetArea(props) {
     const [clipboardMonitor] = useConfig('clipboard_monitor', false);
 
     const detectLanguage = useAtomValue(detectLanguageAtom);
-    const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
     const textAreaRef = useRef();
     const toastStyle = useToastStyle();
@@ -400,46 +397,15 @@ export default function TargetArea(props) {
         }
     }, [result]);
 
-    // refresh tts config
-    useEffect(() => {
-        if (ttsServiceList?.length && getServiceSouceType(ttsServiceList[0]) === ServiceSourceType.PLUGIN) {
-            readTextFile(`plugins/tts/${getServiceName(ttsServiceList[0])}/info.json`, {
-                dir: BaseDirectory.AppConfig,
-            }).then((infoStr) => {
-                setTtsPluginInfo(JSON.parse(infoStr));
-            });
-        }
-    }, [ttsServiceList]);
 
     // handle tts speak
-    const handleSpeak = async () => {
-        const instanceKey = ttsServiceList[0];
-        if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
-            const pluginConfig = serviceInstanceConfigMap[instanceKey];
-            if (!(targetLanguage in ttsPluginInfo.language)) {
-                throw new Error('Language not supported');
-            }
-            let [func, utils] = await invoke_plugin('tts', getServiceName(instanceKey));
-            let data = await func(result, ttsPluginInfo.language[targetLanguage], {
-                config: pluginConfig,
-                utils,
-            });
-            speak(data);
-        } else {
-            if (!(targetLanguage in builtinTtsServices[getServiceName(instanceKey)].Language)) {
-                throw new Error('Language not supported');
-            }
-            const instanceConfig = serviceInstanceConfigMap[instanceKey];
-            let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
-                result,
-                builtinTtsServices[getServiceName(instanceKey)].Language[targetLanguage],
-                {
-                    config: instanceConfig,
-                }
-            );
-            speak(data);
-        }
-    };
+    const handleSpeak = async () => speak(isCurrent => synthesizeSpeech(result, {
+        language: targetLanguage,
+        isCurrent,
+        onService: (title, fallback) => {
+            if (fallback) toast(`已切换至${title}`, { style: toastStyle });
+        },
+    }));
 
     const [boundRef, bounds] = useMeasure({ scroll: true });
     const springs = useSpring({
@@ -766,6 +732,7 @@ export default function TargetArea(props) {
                             {/* speak button */}
                             <Tooltip content={t('translate.speak')}>
                                 <Button
+                                    aria-label='朗读译文'
                                     isIconOnly
                                     variant='light'
                                     size='sm'

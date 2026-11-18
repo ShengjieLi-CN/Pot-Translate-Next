@@ -144,7 +144,7 @@ async function fixture(page, options = {}) {
     );
 }
 
-(async () => {
+async function verifySelection() {
     const browser = await chromium.launch({
         headless: true,
         executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -426,7 +426,9 @@ async function fixture(page, options = {}) {
     } finally {
         await browser.close();
     }
-})().catch((e) => {
+}
+module.exports = { fixture };
+if (require.main === module) verifySelection().catch((e) => {
     console.error(e);
     process.exit(1);
 });

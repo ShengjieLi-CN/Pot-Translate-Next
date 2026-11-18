@@ -9,6 +9,7 @@ import { selectionBlocks, selectionTextStyle } from '../../utils/selection_trans
 import { loadSelectionTranslators, translateSelection } from '../../services/selection_translation';
 import { RiPushpinLine, RiPushpinFill, RiVolumeUpLine, RiStopFill } from 'react-icons/ri';
 import { synthesizeSelection } from '../../services/selection_speech';
+import { createSpeechPlayer } from '../../utils/speech.mjs';
 import './style.css';
 
 export default function SelectionTranslate() {
@@ -25,8 +26,8 @@ export default function SelectionTranslate() {
     const [pinBusy, setPinBusy] = useState(false);
     const [speechState, setSpeechState] = useState('idle');
     const [speechError, setSpeechError] = useState('');
-    const speechRevision = useRef(0);
-    const audio = useRef(null);
+    const [speechNotice, setSpeechNotice] = useState('');
+    const [speechPlayer] = useState(() => createSpeechPlayer());
     const [serviceName, setServiceName] = useState('');
     const [opacity] = useConfig('selection_window_opacity', 100);
     const [savedServiceKey, setSavedServiceKey] = useConfig('selection_translate_service', '');
@@ -42,18 +43,10 @@ export default function SelectionTranslate() {
         if (serviceKey === null && savedServiceKey !== null) setServiceKey(savedServiceKey);
     }, [savedServiceKey, serviceKey]);
 
-    const stopSpeech = () => {
-        speechRevision.current++;
-        const previous = audio.current;
-        audio.current = null;
-        if (previous) {
-            if (previous.source) { previous.source.onended = null; try { previous.source.stop(); } catch {} previous.source.disconnect(); }
-            previous.context.close().catch(() => {});
-        }
-        setSpeechState('idle');
-    };
+    const stopSpeech = () => speechPlayer.stop();
     useEffect(() => {
         setSpeechError('');
+        setSpeechNotice('');
         stopSpeech();
         return stopSpeech;
     }, [selection?.id, selection?.mode]);
@@ -62,28 +55,17 @@ export default function SelectionTranslate() {
         if (speechState !== 'idle') { stopSpeech(); return; }
         const text = selectionBlocks(selection?.runs).map((block) => block.text).join('\n\n').trim();
         if (!text) return;
-        const revision = ++speechRevision.current;
-        const isCurrent = () => speechRevision.current === revision;
         setSpeechError('');
-        setSpeechState('loading');
+        setSpeechNotice('');
         try {
-            // Create/resume during the click so WebView's audio policy permits playback.
-            const context = new (window.AudioContext || window.webkitAudioContext)();
-            audio.current = { context, source: null };
-            await context.resume();
-            const data = await synthesizeSelection(text, isCurrent);
-            if (!isCurrent()) return;
-            const buffer = await context.decodeAudioData(new Uint8Array(data).buffer);
-            if (!isCurrent()) return;
-            const source = context.createBufferSource();
-            source.buffer = buffer;
-            source.connect(context.destination);
-            audio.current.source = source;
-            source.onended = () => { if (isCurrent()) stopSpeech(); };
-            setSpeechState('playing');
-            source.start();
+            await speechPlayer.play(
+                isCurrent => synthesizeSelection(text, isCurrent, (title, fallback) => {
+                    if (isCurrent()) setSpeechNotice(`${fallback ? '已切换至' : '朗读服务：'}${title}`);
+                }),
+                { onState: setSpeechState }
+            );
         } catch (error) {
-            if (isCurrent()) { stopSpeech(); setSpeechError(`原文朗读失败：${String(error)}`); }
+            setSpeechError(`原文朗读失败：${error.message}`);
         }
     };
 
@@ -131,7 +113,7 @@ export default function SelectionTranslate() {
             } catch { /* A closed window or unavailable monitor must not interrupt translation. */ }
         }, 120);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [selection, blocks, status, error, speechError, serviceName]);
+    }, [selection, blocks, status, error, speechError, speechNotice, serviceName]);
 
 
     useEffect(() => {
@@ -361,6 +343,7 @@ export default function SelectionTranslate() {
                             );
                         })}
                 </article>
+                {speechNotice && <p role='status' className='text-xs opacity-70'>{speechNotice}</p>}
                 {speechError && <p className='selection-error' role='alert'>{speechError}</p>}
                 {error && (
                     <div className='selection-error'>

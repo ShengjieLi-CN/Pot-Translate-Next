@@ -1,5 +1,5 @@
+import { synthesizeSpeech } from '../../../../services/selection_speech';
 import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
-import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
@@ -15,11 +15,8 @@ import { invoke } from '@tauri-apps/api';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { activeSentenceAtom, bilingualModeAtom, bilingualDirectionAtom, sourceDraftAtom } from '../../alignment';
 import { splitSentences, bilingualLanguages } from '../../../../utils/sentence_alignment.mjs';
-import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
-import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import { recognize } from '../../../../services/recognize/paddle';
-import * as builtinTtsServices from '../../../../services/tts';
 import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
@@ -32,7 +29,7 @@ let unlisten = null;
 let timer = null;
 
 export default function SourceArea(props) {
-    const { pluginList, serviceInstanceConfigMap, embedded = false, canTranslate = true, children } = props;
+    const { embedded = false, canTranslate = true, children } = props;
     const [appFontSize] = useConfig('app_font_size', 16);
     const savedDraft = useAtomValue(sourceDraftAtom);
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom, embedded ? savedDraft : undefined);
@@ -57,10 +54,8 @@ export default function SourceArea(props) {
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
-    const [ttsServiceList] = useConfig('tts_service_list', ['lingva_tts']);
     const [hideWindow] = useConfig('translate_hide_window', false);
     const [hideSource] = useConfig('hide_source', false);
-    const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
@@ -166,39 +161,13 @@ export default function SourceArea(props) {
         }
     };
 
-    const handleSpeak = async () => {
-        const instanceKey = ttsServiceList[0];
-        let detected = detectLanguage;
-        if (detected === '') {
-            detected = await detect(sourceText);
-            setDetectLanguage(detected);
-        }
-        if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
-            if (!(detected in ttsPluginInfo.language)) {
-                throw new Error('Language not supported');
-            }
-            const pluginConfig = serviceInstanceConfigMap[instanceKey];
-            let [func, utils] = await invoke_plugin('tts', getServiceName(instanceKey));
-            let data = await func(sourceText, ttsPluginInfo.language[detected], {
-                config: pluginConfig,
-                utils,
-            });
-            speak(data);
-        } else {
-            if (!(detected in builtinTtsServices[getServiceName(instanceKey)].Language)) {
-                throw new Error('Language not supported');
-            }
-            const instanceConfig = serviceInstanceConfigMap[instanceKey];
-            let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
-                sourceText,
-                builtinTtsServices[getServiceName(instanceKey)].Language[detected],
-                {
-                    config: instanceConfig,
-                }
-            );
-            speak(data);
-        }
-    };
+    const handleSpeak = async () => speak(isCurrent => synthesizeSpeech(sourceText, {
+        language: detectLanguage || undefined,
+        isCurrent,
+        onService: (title, fallback) => {
+            if (fallback) toast(`已切换至${title}`, { style: toastStyle });
+        },
+    }));
 
     useEffect(() => {
         if (embedded) return;
@@ -216,16 +185,6 @@ export default function SourceArea(props) {
             return () => currentListener.then((unlisten) => unlisten());
         }
     }, [hideWindow, embedded]);
-
-    useEffect(() => {
-        if (ttsServiceList?.length && getServiceSouceType(ttsServiceList[0]) === ServiceSourceType.PLUGIN) {
-            readTextFile(`plugins/tts/${getServiceName(ttsServiceList[0])}/info.json`, {
-                dir: BaseDirectory.AppConfig,
-            }).then((infoStr) => {
-                setTtsPluginInfo(JSON.parse(infoStr));
-            });
-        }
-    }, [ttsServiceList]);
 
     useEffect(() => {
         if (embedded) return;
@@ -463,6 +422,7 @@ export default function SourceArea(props) {
                         <ButtonGroup className='mr-[5px]'>
                             <Tooltip content={t('translate.speak')}>
                                 <Button
+                                    aria-label='朗读原文'
                                     isIconOnly
                                     variant='light'
                                     size='sm'

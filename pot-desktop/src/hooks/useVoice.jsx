@@ -1,28 +1,12 @@
 import { useCallback } from 'react';
-let audioContext = new (window.AudioContext || window.webkitAudioContext)();
-let source = null;
+import { createSpeechPlayer } from '../utils/speech.mjs';
+const player = createSpeechPlayer();
 
-export const useVoice = () => {
-    const playOrStop = useCallback((data) => {
-        if (source) {
-            // 如果正在播放，停止播放
-            source.stop();
-            source.disconnect();
-            source = null;
-        } else {
-            // 如果没在播放，开始播放
-            audioContext.decodeAudioData(new Uint8Array(data).buffer, (buffer) => {
-                source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-                source.start();
-                source.onended = () => {
-                    source.disconnect();
-                    source = null;
-                };
-            });
+export const useVoice = () =>
+    useCallback((data) => {
+        if (player.active) {
+            player.stop();
+            return Promise.resolve();
         }
-    });
-
-    return playOrStop;
-};
+        return player.play(data);
+    }, []);

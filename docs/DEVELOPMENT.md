@@ -40,6 +40,7 @@ pnpm run test:ui:ocr
 | `.scripts/verify-screenshot-ui.cjs` | 框选、原图对照、复制、服务切换、重试、重新截图与空结果 |
 | `.scripts/verify-complex-screenshot-ui.cjs` | 复杂图文、颜色遮罩、150% DPI 与文字自适应 |
 | `.scripts/verify-bullet-screenshot-ui.cjs` | 四项/七项、深浅背景、OCR 漏圆点、独立翻译与复制段落 |
+| `.scripts/verify-speech-ui.cjs` | 复现有道 500 字节数组、启用服务失败切换、火山长文分段、三个朗读入口与语言/配置传递 |
 | `.scripts/verify-selection-ui.cjs` 等 | 对应划词、自动输入、备份、同声传译及升级界面 |
 
 部分旧脚本会更新 `asset/*preview.png`。发布时只提交计划采用的合成演示图，不把调试截图作为源码变更。真实云端验证需要用户自行配置凭据；不要把凭据、个人配置或原始识别结果提交到仓库。
