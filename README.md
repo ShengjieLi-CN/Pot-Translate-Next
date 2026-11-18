@@ -2,9 +2,9 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.5 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.5)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.7 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.7)
 
-3.3.5 将 OCR 统一为 Paddle 官方云端服务，改善截图识别耗时、双栏阅读顺序及项目段落分组，并清理已停用的本地 OCR 资源。模型和 API Key 在“文字识别”页面配置。
+3.3.7 默认使用火山 TTS，移除 Lingva 语音服务和“添加内置服务”入口，并修复长文朗读、服务失败切换及错误提示。OCR 使用 Paddle 官方云端服务，模型和 API Key 在“文字识别”页面配置。
 
 ## 功能演示
 
