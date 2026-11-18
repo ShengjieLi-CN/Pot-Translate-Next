@@ -22,6 +22,26 @@ pub fn init_config(app: &mut tauri::App) {
             info!("Config not found, creating new config");
         }
     }
+    let mut settings: serde_json::Map<String, Value> = store
+        .entries()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    if crate::tts_defaults::migrate(&mut settings) {
+        let directory = dirs::config_dir()
+            .unwrap()
+            .join(&app.config().tauri.bundle.identifier);
+        match crate::tts_defaults::install_plugin(&directory) {
+            Ok(()) => {
+                for (key, value) in settings {
+                    store.insert(key, value).unwrap();
+                }
+                if let Err(error) = store.save() {
+                    warn!("Unable to save default TTS: {:?}", error);
+                }
+            }
+            Err(error) => warn!("Unable to prepare default TTS plugin: {:?}", error),
+        }
+    }
     app.manage(StoreWrapper(Mutex::new(store)));
     let _ = check_service_available();
 }
@@ -75,7 +95,7 @@ pub fn check_service_available() -> Result<(), Error> {
         "yandex",
         "youdao",
     ];
-    let builtin_tts_list: Vec<&str> = vec!["lingva_tts"];
+    let builtin_tts_list: Vec<&str> = vec![];
     let builtin_collection_list: Vec<&str> = vec!["anki", "eudic"];
 
     let plugin_translate_list: Vec<String> = get_plugin_list("translate").unwrap_or_default();

@@ -6,6 +6,7 @@ mod quark;
 mod clipboard;
 mod cmd;
 mod config;
+mod tts_defaults;
 mod error;
 mod hotkey;
 mod lang_detect;

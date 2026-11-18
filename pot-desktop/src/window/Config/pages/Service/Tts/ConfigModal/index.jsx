@@ -2,25 +2,17 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Space
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 
-import {
-    ServiceSourceType,
-    getServiceName,
-    getServiceSouceType,
-    whetherPluginService,
-} from '../../../../../../utils/service_instance';
-import * as builtinServices from '../../../../../../services/tts';
+import { getServiceName, whetherPluginService } from '../../../../../../utils/service_instance';
 import { PluginConfig } from '../../PluginConfig';
 
 export default function ConfigModal(props) {
     const { serviceInstanceKey, pluginList, isOpen, onOpenChange, updateServiceInstanceList } = props;
 
-    const serviceSourceType = getServiceSouceType(serviceInstanceKey);
     const pluginServiceFlag = whetherPluginService(serviceInstanceKey);
     const serviceName = getServiceName(serviceInstanceKey);
     const { t } = useTranslation();
-    const ConfigComponent = pluginServiceFlag ? PluginConfig : builtinServices[serviceName].Config;
 
-    return pluginServiceFlag && !(serviceName in pluginList) ? (
+    return !pluginServiceFlag || !(serviceName in pluginList) ? (
         <></>
     ) : (
         <Modal
@@ -32,17 +24,6 @@ export default function ConfigModal(props) {
                 {(onClose) => (
                     <>
                         <ModalHeader>
-                            {serviceSourceType === ServiceSourceType.BUILDIN && (
-                                <>
-                                    <img
-                                        src={builtinServices[serviceName].info.icon}
-                                        className='h-[24px] w-[24px] my-auto'
-                                        draggable={false}
-                                    />
-                                    <Spacer x={2} />
-                                    {t(`services.tts.${serviceName}.title`)}
-                                </>
-                            )}
                             {pluginServiceFlag && (
                                 <>
                                     <img
@@ -57,10 +38,10 @@ export default function ConfigModal(props) {
                             )}
                         </ModalHeader>
                         <ModalBody>
-                            <ConfigComponent
+                            <PluginConfig
                                 name={serviceName}
                                 instanceKey={serviceInstanceKey}
-                                pluginType='translate'
+                                pluginType='tts'
                                 pluginList={pluginList}
                                 updateServiceList={updateServiceInstanceList}
                                 onClose={onClose}

@@ -11,7 +11,6 @@ import {
     getServiceName,
     getServiceSouceType,
 } from '../../../../../../utils/service_instance';
-import * as builtinServices from '../../../../../../services/tts';
 import { useConfig } from '../../../../../../hooks';
 
 export default function ServiceItem(props) {
@@ -23,7 +22,7 @@ export default function ServiceItem(props) {
     const serviceSourceType = getServiceSouceType(serviceInstanceKey);
     const serviceName = getServiceName(serviceInstanceKey);
 
-    return serviceSourceType === ServiceSourceType.PLUGIN && !(serviceName in pluginList) ? (
+    return serviceSourceType !== ServiceSourceType.PLUGIN || !(serviceName in pluginList) ? (
         <></>
     ) : (
         serviceInstanceConfig !== null && (
@@ -37,20 +36,6 @@ export default function ServiceItem(props) {
                     </div>
 
                     <Spacer x={2} />
-                    {serviceSourceType === ServiceSourceType.BUILDIN && (
-                        <>
-                            <img
-                                src={`${builtinServices[serviceName].info.icon}`}
-                                className='h-[24px] w-[24px] my-auto'
-                                draggable={false}
-                            />
-                            <Spacer x={2} />
-                            <h2 className='my-auto'>
-                                {serviceInstanceConfig[INSTANCE_NAME_CONFIG_KEY] ||
-                                    t(`services.tts.${serviceName}.title`)}
-                            </h2>
-                        </>
-                    )}
                     {serviceSourceType === ServiceSourceType.PLUGIN && (
                         <>
                             <img

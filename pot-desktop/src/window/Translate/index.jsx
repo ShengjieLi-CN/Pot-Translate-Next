@@ -80,7 +80,7 @@ export default function Translate() {
         'google',
         'ecdict',
     ]);
-    const [ttsServiceInstanceList] = useConfig('tts_service_list', ['lingva_tts']);
+    const [ttsServiceInstanceList] = useConfig('tts_service_list', []);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
     const [pined, setPined] = useState(false);

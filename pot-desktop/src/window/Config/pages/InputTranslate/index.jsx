@@ -30,7 +30,7 @@ function InputTranslateContent() {
         'google',
         'ecdict',
     ]);
-    const [ttsServices] = useConfig('tts_service_list', ['lingva_tts']);
+    const [ttsServices] = useConfig('tts_service_list', []);
     const [collectionServices] = useConfig('collection_service_list', []);
     const [resources, setResources] = useState(null);
     const [error, setError] = useState('');

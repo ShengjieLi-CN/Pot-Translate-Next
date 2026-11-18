@@ -9,7 +9,6 @@ import SelectPluginModal from '../SelectPluginModal';
 import { osType } from '../../../../../utils/env';
 import { useConfig, deleteKey } from '../../../../../hooks';
 import ServiceItem from './ServiceItem';
-import SelectModal from './SelectModal';
 import ConfigModal from './ConfigModal';
 
 export default function Tts(props) {
@@ -19,11 +18,10 @@ export default function Tts(props) {
         onOpen: onSelectPluginOpen,
         onOpenChange: onSelectPluginOpenChange,
     } = useDisclosure();
-    const { isOpen: isSelectOpen, onOpen: onSelectOpen, onOpenChange: onSelectOpenChange } = useDisclosure();
     const { isOpen: isConfigOpen, onOpen: onConfigOpen, onOpenChange: onConfigOpenChange } = useDisclosure();
-    const [currentConfigKey, setCurrentConfigKey] = useState('lingva_tts');
+    const [currentConfigKey, setCurrentConfigKey] = useState('');
     // now it's service instance list
-    const [ttsServiceInstanceList, setTtsServiceInstanceList] = useConfig('tts_service_list', ['lingva_tts']);
+    const [ttsServiceInstanceList, setTtsServiceInstanceList] = useConfig('tts_service_list', []);
 
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
@@ -115,13 +113,6 @@ export default function Tts(props) {
                 <div className='flex'>
                     <Button
                         fullWidth
-                        onPress={onSelectOpen}
-                    >
-                        {t('config.service.add_builtin_service')}
-                    </Button>
-                    <Spacer x={2} />
-                    <Button
-                        fullWidth
                         onPress={onSelectPluginOpen}
                     >
                         {t('config.service.add_external_service')}
@@ -136,12 +127,6 @@ export default function Tts(props) {
                 pluginType='tts'
                 pluginList={pluginList}
                 deleteService={deleteServiceInstance}
-            />
-            <SelectModal
-                isOpen={isSelectOpen}
-                onOpenChange={onSelectOpenChange}
-                setCurrentConfigKey={setCurrentConfigKey}
-                onConfigOpen={onConfigOpen}
             />
             <ConfigModal
                 serviceInstanceKey={currentConfigKey}
