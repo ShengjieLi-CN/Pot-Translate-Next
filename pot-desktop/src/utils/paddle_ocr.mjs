@@ -52,7 +52,12 @@ export function parsePaddleResult(jsonl) {
                     boxFrom(result.rec_polys?.[i]) || boxFrom(result.rec_boxes?.[i]) || boxFrom(result.dt_polys?.[i]);
                 // Paddle supplies full lines, not word boxes. Keep its recognized
                 // text even when a line touches the crop edge.
-                if (box) lines.push({ text, box });
+                if (box)
+                    lines.push({
+                        text,
+                        box,
+                        ...(Number.isFinite(result.rec_scores?.[i]) ? { confidence: result.rec_scores[i] } : {}),
+                    });
             });
         }
     }
