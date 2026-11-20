@@ -3,9 +3,6 @@ import { Button, Card, CardBody, Switch } from '@nextui-org/react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useConfig } from '../../../../hooks';
-import { languageList } from '../../../../utils/language';
-import { loadSelectionTranslators } from '../../../../services/selection_translation';
 
 export default function SelectionSettings() {
     const { i18n, t } = useTranslation();
@@ -14,10 +11,6 @@ export default function SelectionSettings() {
     const [status, setStatus] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const [keys] = useConfig('translate_service_list', ['deepl', 'bing', 'lingva', 'yandex', 'google']);
-    const [service, setService] = useConfig('selection_translate_service', '');
-    const [target, setTarget] = useConfig('selection_target_language', 'zh_cn');
-    const [services, setServices] = useState([]);
     useEffect(() => {
         let disposed = false;
         const refresh = () =>
@@ -35,20 +28,6 @@ export default function SelectionSettings() {
             clearInterval(timer);
         };
     }, []);
-    useEffect(() => {
-        if (!keys) return;
-        let disposed = false;
-        loadSelectionTranslators(keys)
-            .then((value) => {
-                if (!disposed) setServices(value);
-            })
-            .catch((e) => {
-                if (!disposed) setError(String(e));
-            });
-        return () => {
-            disposed = true;
-        };
-    }, [keys]);
     const toggle = async (enabled) => {
         setBusy(true);
         setError('');
@@ -70,7 +49,7 @@ export default function SelectionSettings() {
                 <h2 className='text-xl font-semibold'>{L('划词翻译', 'Selection translation')}</h2>
                 <p className='text-default-500'>
                     {L(
-                        '选中文字后点击附近的“译”按钮；浮窗仅显示译文，保留原有段落。',
+                        '选中文字后点击附近的“译”按钮；在原有翻译窗口中显示原文、语言选项和各服务译文。',
                         'Select text in a PDF, browser or document, then click the nearby Translate badge. Only the translation is shown, preserving paragraphs and available font styles while merging PDF line breaks.'
                     )}
                 </p>
@@ -109,7 +88,7 @@ export default function SelectionSettings() {
                         className='text-sm text-success'
                     >
                         {L(
-                            '划词监听已就绪：选中文字后点击附近的“译”，浮窗仅显示译文。',
+                            '划词监听已就绪：选中文字后点击附近的“译”，在原有翻译窗口查看原文和译文。',
                             'Ready: select text and click the nearby Translate badge. The popup shows only the translation.'
                         )}
                     </p>
@@ -126,53 +105,6 @@ export default function SelectionSettings() {
                         {status.lastError ? ` ${status.lastError}` : ''}
                     </p>
                 )}
-                {status && !status.supported && (
-                    <p>
-                        {L(
-                            '自动划词目前支持 Windows；其他平台可使用划词翻译快捷键。',
-                            'The automatic badge currently supports Windows. Other platforms can use the selection translation shortcut.'
-                        )}
-                    </p>
-                )}
-                <label className='flex flex-col gap-2'>
-                    <span>{L('翻译服务', 'Translation service')}</span>
-                    <select
-                        className='p-2 rounded-lg bg-content2'
-                        aria-label={L('划词翻译服务', 'Selection translation service')}
-                        value={service || ''}
-                        onChange={(e) => setService(e.target.value)}
-                    >
-                        <option value=''>{L('使用首个已启用的文本翻译服务', 'First enabled text translator')}</option>
-                        {services.map((s) => (
-                            <option
-                                key={s.key}
-                                value={s.key}
-                            >
-                                {s.title ||
-                                    s.config.instanceName ||
-                                    t(`services.${s.name}.title`, { defaultValue: s.name })}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className='flex flex-col gap-2'>
-                    <span>{L('目标语言', 'Target language')}</span>
-                    <select
-                        className='p-2 rounded-lg bg-content2'
-                        aria-label={L('划词目标语言', 'Selection target language')}
-                        value={target || 'zh_cn'}
-                        onChange={(e) => setTarget(e.target.value)}
-                    >
-                        {languageList.map((language) => (
-                            <option
-                                key={language}
-                                value={language}
-                            >
-                                {t(`languages.${language}`)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
                 <div className='flex flex-wrap gap-3'>
                     <Button
                         variant='flat'

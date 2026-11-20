@@ -5,7 +5,6 @@ import { Button } from '@nextui-org/react';
 import { BsPinFill } from 'react-icons/bs';
 
 import WindowControl from '../../components/WindowControl';
-import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import ControlArea from './ControlArea';
 import ImageArea from './ImageArea';
@@ -54,12 +53,12 @@ export default function Recognize() {
     }, [closeOnBlur]);
 
     return (
-        <div className={`bg-background h-screen ${osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'}`}>
+        <div className='bg-background h-screen'>
             <div
                 data-tauri-drag-region='true'
                 className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
             />
-            <div className={`h-[35px] flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}>
+            <div className='h-[35px] flex justify-between'>
                 <Button
                     isIconOnly
                     size='sm'
@@ -81,9 +80,9 @@ export default function Recognize() {
                 >
                     <BsPinFill className={`text-[20px] ${pined ? 'text-primary' : 'text-default-400'}`} />
                 </Button>
-                {osType !== 'Darwin' && <WindowControl />}
+                <WindowControl />
             </div>
-            <div className={`${osType === 'Linux' ? 'h-[calc(100vh-87px)]' : 'h-[calc(100vh-85px)]'} grid grid-cols-2`}>
+            <div className='h-[calc(100vh-85px)] grid grid-cols-2'>
                 <ImageArea />
                 <TextArea />
             </div>

@@ -77,20 +77,7 @@ pub fn live_audio_start(
         .map_err(|_| "Audio device did not initialize".to_string())?
 }
 
-#[cfg(not(target_os = "windows"))]
-fn capture_audio(
-    _: &tauri::Window,
-    _: &str,
-    _: &str,
-    _: Arc<AtomicBool>,
-    ready: std::sync::mpsc::SyncSender<Result<(), String>>,
-) -> Result<(), String> {
-    let error = "当前原生实时音频采集仅支持 Windows。".to_string();
-    let _ = ready.send(Err(error.clone()));
-    Err(error)
-}
 
-#[cfg(target_os = "windows")]
 fn capture_audio(
     window: &tauri::Window,
     session: &str,
@@ -109,7 +96,6 @@ fn capture_audio(
     })
 }
 
-#[cfg(target_os = "windows")]
 fn capture_windows(
     source: &str,
     stop: Arc<AtomicBool>,
@@ -582,7 +568,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
     #[ignore = "requires a real Windows audio output device; run explicitly"]
     fn windows_loopback_opens_captures_pcm_and_stops() {
         use std::sync::atomic::AtomicUsize;

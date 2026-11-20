@@ -4,7 +4,6 @@ import { appWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '@nextui-org/react';
 
-import { osType } from '../../utils/env';
 import './style.css';
 
 export default function WindowControl() {
@@ -47,7 +46,7 @@ export default function WindowControl() {
             <Button
                 isIconOnly
                 variant='light'
-                className={`w-[35px] h-[35px] rounded-none close-button ${osType === 'Linux' && 'rounded-tr-[10px]'}`}
+                className='w-[35px] h-[35px] rounded-none close-button'
                 onPress={() => appWindow.close()}
             >
                 <VscChromeClose className='text-[16px]' />

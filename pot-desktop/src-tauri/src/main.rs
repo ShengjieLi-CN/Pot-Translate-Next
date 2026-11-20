@@ -1,6 +1,9 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(not(target_os = "windows"))]
+compile_error!("Pot Translate Next requires Windows.");
+
 mod backup;
 mod quark;
 mod clipboard;
@@ -61,6 +64,7 @@ fn main() {
                 .targets([LogTarget::LogDir, LogTarget::Stdout])
                 .build(),
         )
+        // The launcher parameter is ignored by the Windows autostart backend.
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![]),
@@ -71,13 +75,6 @@ fn main() {
         .system_tray(tauri::SystemTray::new())
         .setup(|app| {
             info!("============== Start App ==============");
-            #[cfg(target_os = "macos")]
-            {
-                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-                let trusted =
-                    macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
-                info!("MacOS Accessibility Trusted: {}", trusted);
-            }
             // Global AppHandle
             APP.get_or_init(|| app.handle());
             // Init Config
@@ -151,8 +148,6 @@ fn main() {
             selection_translate::selection_payload,
             selection_translate::selection_open,
             selection_translate::selection_dismiss,
-            selection_translate::selection_set_pinned,
-            selection_translate::selection_resize,
             selection_translate::selection_status,
             selection_translate::selection_set_enabled,
             live_audio::live_audio_start,
@@ -193,7 +188,6 @@ fn main() {
             }
             if matches!(event.event(), tauri::WindowEvent::Destroyed) {
                 live_audio::stop_for_window(event.window().label());
-                selection_translate::forget_result(event.window().label());
             }
         })
         .build(tauri::generate_context!())

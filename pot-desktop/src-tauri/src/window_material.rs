@@ -11,14 +11,12 @@ pub fn set_window_material(window: Window, material: String, dark: bool) -> Resu
         "translate",
         "recognize",
         "updater",
-        "selection_translate",
         "image_translate",
     ]
     .contains(&window.label())
     {
         return Ok(());
     }
-    #[cfg(target_os = "windows")]
     {
         use std::ffi::c_void;
         #[link(name = "dwmapi")]
@@ -48,14 +46,5 @@ pub fn set_window_material(window: Window, material: String, dark: bool) -> Resu
             }
         }
         Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = dark;
-        if material == "none" {
-            Ok(())
-        } else {
-            Err("此窗口材质需要 Windows 11，已使用不透明背景。".into())
-        }
     }
 }

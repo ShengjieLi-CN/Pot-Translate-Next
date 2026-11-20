@@ -15,7 +15,6 @@ import { bilingualModeAtom } from './alignment';
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
 import TargetArea from './components/TargetArea';
-import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
 import { info } from 'tauri-plugin-log-api';
@@ -225,15 +224,13 @@ export default function Translate() {
     return (
         pluginList && (
             <div
-                className={`bg-background h-screen w-screen ${
-                    osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
-                }`}
+                className='bg-background h-screen w-screen'
             >
                 <div
                     className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
                     data-tauri-drag-region='true'
                 />
-                <div className={`h-[35px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}>
+                <div className='h-[35px] w-full flex justify-between'>
                     <Button
                         isIconOnly
                         size='sm'
@@ -260,7 +257,7 @@ export default function Translate() {
                         size='sm'
                         variant='flat'
                         disableAnimation
-                        className={`my-auto ${osType === 'Darwin' && 'hidden'} bg-transparent`}
+                        className='my-auto bg-transparent'
                         onPress={() => {
                             void appWindow.close();
                         }}
@@ -268,7 +265,7 @@ export default function Translate() {
                         <AiFillCloseCircle className='text-[20px] text-default-400' />
                     </Button>
                 </div>
-                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-37px)]' : 'h-[calc(100vh-35px)]'} px-[8px]`}>
+                <div className='h-[calc(100vh-35px)] px-[8px]'>
                     <div className='h-full overflow-y-auto'>
                         <BilingualControls />
                         <div>

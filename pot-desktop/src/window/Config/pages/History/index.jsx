@@ -16,7 +16,6 @@ import * as builtinServices from '../../../../services/translate';
 import { useConfig, useToastStyle } from '../../../../hooks';
 import { LanguageFlag } from '../../../../utils/language';
 import { store } from '../../../../utils/store';
-import { osType } from '../../../../utils/env';
 import {
     ServiceSourceType,
     ServiceType,
@@ -130,9 +129,7 @@ export default function History() {
                     selectionBehavior='toggle'
                     aria-label='History Table'
                     classNames={{
-                        base: `${
-                            osType === 'Linux' ? 'h-[calc(100vh-130px)]' : 'h-[calc(100vh-100px)]'
-                        } overflow-y-auto`,
+                        base: `h-[calc(100vh-100px)] overflow-y-auto`,
                         td: 'px-0',
                     }}
                     onRowAction={(id) => {
@@ -175,11 +172,7 @@ export default function History() {
                                     </TableCell>
                                     <TableCell>
                                         <p
-                                            className={`whitespace-nowrap ${
-                                                osType === 'Linux'
-                                                    ? 'w-[calc((100vw-287px-26px-60px-140px-30px)*0.5)]'
-                                                    : 'w-[calc((100vw-287px-26px-60px-140px)*0.5)]'
-                                            } text-ellipsis overflow-hidden`}
+                                            className='whitespace-nowrap w-[calc((100vw-287px-26px-60px-140px)*0.5)] text-ellipsis overflow-hidden'
                                         >
                                             {item.text}
                                         </p>
@@ -192,11 +185,7 @@ export default function History() {
                                     </TableCell>
                                     <TableCell>
                                         <p
-                                            className={`whitespace-nowrap ${
-                                                osType === 'Linux'
-                                                    ? 'w-[calc((100vw-287px-26px-60px-140px-30px)*0.5)]'
-                                                    : 'w-[calc((100vw-287px-26px-60px-140px)*0.5)]'
-                                            } text-ellipsis overflow-hidden`}
+                                            className='whitespace-nowrap w-[calc((100vw-287px-26px-60px-140px)*0.5)] text-ellipsis overflow-hidden'
                                         >
                                             {item.result}
                                         </p>

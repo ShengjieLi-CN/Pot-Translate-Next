@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "pot",
-        "version": "3.3.9"
+        "version": "3.4.0"
     },
     "tauri": {
         "allowlist": {
@@ -66,9 +66,11 @@
             "active": true,
             "category": "Utility",
             "copyright": "GPLv3",
-            "targets": "all",
+            "targets": [
+                "msi"
+            ],
             "identifier": "com.pot-app.desktop",
-            "longDescription": "A cross-platform text translation and ocr software",
+            "longDescription": "Windows text translation and OCR software",
             "shortDescription": "Pot App",
             "externalBin": [],
             "resources": [],
@@ -76,30 +78,8 @@
                 "icons/32x32.png",
                 "icons/128x128.png",
                 "icons/128x128@2x.png",
-                "icons/icon.icns",
                 "icons/icon.ico"
-            ],
-            "deb": {
-                "depends": [
-                    "libxdo-dev",
-                    "libxcb1",
-                    "libxrandr2"
-                ]
-            },
-            "rpm": {
-                "depends": [
-                    "libxdo-dev",
-                    "libxcb1",
-                    "libxrandr2"
-                ]
-            },
-            "macOS": {
-                "entitlements": null,
-                "exceptionDomain": "",
-                "frameworks": [],
-                "providerShortName": null,
-                "signingIdentity": null
-            }
+            ]
         },
         "security": {
             "csp": "default-src * data: ; img-src * 'self' asset: https: data: ; style-src * 'unsafe-inline'; worker-src 'self' blob: ; script-src * 'unsafe-eval';",
@@ -115,8 +95,8 @@
             }
         ],
         "systemTray": {
-            "iconPath": "icons/icon.png",
-            "iconAsTemplate": true
+            "iconPath": "icons/icon.ico",
+            "iconAsTemplate": false
         },
         "updater": {
             "active": false,

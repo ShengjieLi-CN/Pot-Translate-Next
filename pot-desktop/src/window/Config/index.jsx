@@ -7,7 +7,6 @@ import { BsPinFill } from 'react-icons/bs';
 
 import WindowControl from '../../components/WindowControl';
 import SideBar from './components/SideBar';
-import { osType } from '../../utils/env';
 import routes from './routes';
 import './style.css';
 
@@ -44,9 +43,7 @@ export default function Config() {
         <>
             <Card
                 shadow='none'
-                className={`bg-content1 float-left w-[230px] h-screen rounded-none ${
-                    osType === 'Linux' && 'rounded-l-[10px] border-1'
-                } border-r-1 border-default-100 select-none cursor-default`}
+                className='bg-content1 float-left w-[230px] h-screen rounded-none border-r-1 border-default-100 select-none cursor-default'
             >
                 <div className='h-[35px] px-[5px] flex items-center'>
                     <Tooltip content={pinError || pinLabel}>
@@ -92,9 +89,7 @@ export default function Config() {
                 <SideBar />
             </Card>
             <div
-                className={`bg-background ml-[230px] h-screen select-none cursor-default ${
-                    osType === 'Linux' && 'rounded-r-[10px] border-1 border-l-0 border-default-100'
-                }`}
+                className='bg-background ml-[230px] h-screen select-none cursor-default'
             >
                 <div
                     data-tauri-drag-region='true'
@@ -111,13 +106,13 @@ export default function Config() {
                         </h2>
                     </div>
 
-                    <div className='flex'>{osType !== 'Darwin' && <WindowControl />}</div>
+                    <div className='flex'>
+                        <WindowControl />
+                    </div>
                 </div>
                 <Divider />
                 <div
-                    className={`p-[10px] overflow-y-auto ${
-                        osType === 'Linux' ? 'h-[calc(100vh-38px)]' : 'h-[calc(100vh-36px)]'
-                    }`}
+                    className='p-[10px] overflow-y-auto h-[calc(100vh-36px)]'
                 >
                     {page}
                 </div>

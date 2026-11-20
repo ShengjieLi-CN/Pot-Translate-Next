@@ -30,7 +30,7 @@ export async function invoke_plugin(pluginType, pluginName) {
         run,
         cacheDir, // String
         pluginDir, // String
-        osType,// "Windows_NT", "Darwin", "Linux"
+        osType,
     }
     return [eval(`${script} ${pluginType}`), utils];
 }

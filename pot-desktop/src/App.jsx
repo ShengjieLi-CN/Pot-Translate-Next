@@ -19,7 +19,7 @@ import { useConfig } from './hooks';
 import './style.css';
 import './i18n';
 
-const isSelectionWindow = appWindow.label === 'selection_translate' || appWindow.label.startsWith('selection_translate_');
+const isSelectionWindow = appWindow.label === 'selection_translate';
 
 const windowMap = {
     translate: <Translate />,

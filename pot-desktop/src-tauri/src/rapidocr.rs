@@ -60,7 +60,6 @@ fn command(path: &Path, script: &str) -> Command {
         .current_dir(path)
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONUTF8", "1");
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);

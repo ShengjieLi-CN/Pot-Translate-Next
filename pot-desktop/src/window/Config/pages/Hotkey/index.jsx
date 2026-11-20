@@ -9,7 +9,6 @@ import React from 'react';
 
 import { useConfig } from '../../../../hooks/useConfig';
 import { useToastStyle } from '../../../../hooks';
-import { osType } from '../../../../utils/env';
 import { invoke } from '@tauri-apps/api';
 
 const keyMap = {
@@ -67,7 +66,7 @@ export default function Hotkey() {
                 newValue = `${newValue}${newValue.length > 0 ? '+' : ''}Shift`;
             }
             if (e.metaKey) {
-                newValue = `${newValue}${newValue.length > 0 ? '+' : ''}${osType === 'Darwin' ? 'Command' : 'Super'}`;
+                newValue = `${newValue}${newValue.length > 0 ? '+' : ''}Super`;
             }
             if (e.altKey) {
                 newValue = `${newValue}${newValue.length > 0 ? '+' : ''}Alt`;

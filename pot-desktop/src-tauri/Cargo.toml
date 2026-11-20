@@ -1,6 +1,6 @@
 [package]
 name = "pot"
-version = "3.3.9"
+version = "3.4.0"
 description = "Pot App"
 authors = ["pot-app"]
 license = "GPL-3.0-only"
@@ -43,16 +43,9 @@ thiserror = "1.0"
 font-kit = "0.14.2"
 image = "0.25.4"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-macos-accessibility-client = "0.0.1"
-window-shadows = "0.2"
-
 [target.'cfg(windows)'.dependencies]
 windows = {version="0.58.0",features= ["Win32_UI_WindowsAndMessaging", "Win32_UI_Accessibility", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_Foundation", "Win32_Media_Audio", "Win32_System_Com"] }
 window-shadows = "0.2"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-#openssl
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

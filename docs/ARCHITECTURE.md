@@ -1,6 +1,6 @@
 # 模块结构与接口约定
 
-项目由 React 界面和 Tauri 1 / Rust 桌面程序组成，当前维护目标是 Windows x64 简体中文版。翻译服务与 OCR 是独立模块：切换翻译服务不会切换 OCR 提供商。
+项目由 React 界面和 Tauri 1 / Rust 桌面程序组成，应用仅支持 Windows，发布目标为 Windows x64 简体中文版。翻译服务与 OCR 是独立模块：切换翻译服务不会切换 OCR 提供商。
 
 本轮整理采用 mattpocock `codebase-design` 的原则：将行为集中在小接口之后，让调用方不需要了解网络协议、缓存和分段细节。模块（Module）的接口（Interface）包括输入、结果、错误、取消及性能约定；浏览器/Tauri 适配器（Adapter）在依赖接入点（Seam）连接纯逻辑和运行环境。
 

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 
 import SelectPluginModal from '../SelectPluginModal';
-import { osType } from '../../../../../utils/env';
 import { useConfig, deleteKey } from '../../../../../hooks';
 import ServiceItem from './ServiceItem';
 import SelectModal from './SelectModal';
@@ -53,9 +52,7 @@ export default function Collection(props) {
     return (
         <>
             <Card
-                className={`${
-                    osType === 'Linux' ? 'h-[calc(100vh-140px)]' : 'h-[calc(100vh-120px)]'
-                } overflow-y-auto p-5 flex justify-between`}
+                className='h-[calc(100vh-120px)] overflow-y-auto p-5 flex justify-between'
             >
                 <DragDropContext onDragEnd={onDragEnd}>
                     <Droppable

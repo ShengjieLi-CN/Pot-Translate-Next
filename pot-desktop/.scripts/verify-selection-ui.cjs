@@ -1,434 +1,112 @@
+// Run against the production build with a Windows Chrome installation.
 const assert = require('node:assert/strict');
-const path = require('node:path');
 const fs = require('node:fs/promises');
+const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
 const { installMock } = require('./verify-screenshot-ui.cjs');
 
-async function fixture(page, options = {}) {
-    await page.exposeFunction('__resizeSelectionWindow', async ({ width, height }) => {
-        await page.setViewportSize({width: Math.round(width), height: Math.round(height)});
-        return [width, height];
-    });
-    await installMock(page, { label: options.config ? 'config' : options.label || 'selection_translate', noService: options.noService });
-    await page.addInitScript(
-        ({ options }) => {
+(async () => {
+    const browser = await chromium.launch({ headless: true,
+        executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
+    try {
+        const badge = await browser.newPage({ viewport: { width: 40, height: 40 } });
+        const errors = [];
+        badge.on('pageerror', (error) => errors.push(error.message));
+        await installMock(badge, { label: 'selection_translate' });
+        await badge.addInitScript(() => {
             const base = window.__TAURI_IPC__;
-            const state = (window.__selectionFixture = {
-                payload: {
-                    id: 1,
-                    mode: options.result ? 'result' : 'badge',
-                    runs: [
-                        { text: 'Results\n', style: { bold: true, fontSize: 18, fontFamily: 'Georgia' } },
-                        {
-                            text: 'The geome-\ntrical RNA structure is predicted. Another\nsentence follows.\n\nSecond source paragraph.',
-                            style: { fontSize: 12, italic: true },
-                        },
-                    ],
-                    x: 500,
-                    y: 250,
-                },
-                requests: [],
-                fail: false,
-                hold: false,
-                releases: [],
-                enabled: true,
-                listening: true,
-                captureFail: false,
-                holdCapture: false,
-                captureReleases: [],
-                settings: {},
-            });
-            state.speechCalls = [];
-            state.audioStarts = 0;
-            state.audioStops = 0;
-            state.speechReleases = [];
-            window.AudioContext = class {
-                destination = {};
-                resume() { return Promise.resolve(); }
-                close() { return Promise.resolve(); }
-                decodeAudioData() { return Promise.resolve({}); }
-                createBufferSource() {
-                    const source = { connect() {}, disconnect() {}, start() { state.audioStarts++; }, stop() { state.audioStops++; } };
-                    state.audioSource = source;
-                    return source;
-                }
+            window.__selection = { id: 1, mode: 'badge' };
+            window.__openCount = 0;
+            window.__captureFails = true;
+            const listeners = new Map();
+            window.__selectionEvent = (payload) => {
+                window.__selection = payload;
+                for (const [id, listener] of listeners) window[`_${listener.handler}`]?.({ id, event: 'selection_changed', payload });
             };
-            state.sourceRuns = state.payload.runs;
-            if (options.deferred) state.payload.runs = [];
-            window.__setSelection = async (payload) => {
-                state.payload = payload;
-                await base({
-                    cmd: 'tauri',
-                    __tauriModule: 'Event',
-                    message: { cmd: 'emit', event: 'selection_changed', payload },
-                    callback: 0,
-                    error: 0,
-                });
-            };
-            window.__TAURI_IPC__ = async (request) => {
+            window.__TAURI_IPC__ = (request) => {
                 const done = (value) => window[`_${request.callback}`]?.(value);
-                const fail = (value) => window[`_${request.error}`]?.(value);
-                if (request.cmd === 'plugin:store|get' && request.key === 'selection_window_opacity' && options.opacity) return done(options.opacity);
-                if (request.cmd === 'plugin:store|save') state.saved = true;
-                if (request.cmd === 'selection_payload') return done(state.payload);
+                if (request.cmd === 'selection_payload') return done(window.__selection);
                 if (request.cmd === 'selection_open') {
-                    await window.__setSelection({ ...state.payload, mode: 'capturing' });
-                    if (state.holdCapture) await new Promise((resolve) => state.captureReleases.push(resolve));
-                    await window.__setSelection({
-                        ...state.payload,
-                        mode: 'result',
-                        runs: state.captureFail ? [] : state.sourceRuns,
-                        captureError: state.captureFail ? '未读取到选中文字。请重新划词。' : null,
-                    });
+                    window.__openCount++;
+                    if (window.__captureFails) return window[`_${request.error}`]?.('请重新划词');
+                    window.__selectionEvent(null);
                     return done(null);
                 }
-                if (request.cmd === 'plugin:store|get' && request.key === 'tts_service_list') return done(options.noTts ? [] : ['plugin.fixture.voice@test']);
-                if (request.cmd === 'plugin:store|get' && request.key === 'plugin.fixture.voice@test') return done({ apiKey: 'fixture-voice-key', enable: true });
-                if (request.cmd === 'tauri' && request.__tauriModule === 'Fs' && request.message.cmd === 'readTextFile') {
-                    const path = request.message.path;
-                    if (path.endsWith('/info.json') && path.includes('tts/')) return done(JSON.stringify({language: {en: 'en-US'}}));
-                    if (path.endsWith('/main.js') && path.includes('tts/')) return done(`async function tts(text, lang, options) {
-                        const state = window.__selectionFixture;
-                        state.speechCalls.push({text, lang, config: options.config, hasUtils: !!options.utils});
-                        if (state.holdSpeech) await new Promise(resolve => state.speechReleases.push(resolve));
-                        if (state.failSpeech) throw new Error('fixture synthesis error');
-                        return [82, 73, 70, 70];
-                    }`);
-                }
-                if (request.cmd === 'selection_resize') {
-                    (state.sizes ||= []).push({ width: request.width, height: request.height });
-                    return done(await window.__resizeSelectionWindow({width: request.width, height: request.height}));
-                }
-                if (request.cmd === 'selection_set_pinned') {
-                    state.pinned = request.pinned;
-                    return done(null);
-                }
-                if (request.cmd === 'selection_dismiss') {
-                    await window.__setSelection(null);
-                    return done(null);
-                }
-                if (request.cmd === 'selection_status')
-                    return done({ enabled: state.enabled, supported: true, listening: state.listening });
-                if (request.cmd === 'selection_set_enabled') {
-                    state.enabled = request.enabled;
-                    return done(null);
-                }
-                if (request.cmd === 'plugin:store|set') state.settings[request.key] = request.value;
-                if (
-                    request.cmd === 'tauri' &&
-                    request.__tauriModule === 'Http' &&
-                    request.message.cmd === 'httpRequest'
-                ) {
-                    const text = request.message.options.body.payload.messages.at(-1).content;
-                    state.requests.push(request.message.options);
-                    if (state.hold) await new Promise((resolve) => state.releases.push(resolve));
-                    if (state.fail) return fail('fixture network error');
-                    const content = text.includes('Second source')
-                        ? '第二段译文。'
-                        : text.endsWith('Results')
-                          ? '结果'
-                          : text.includes('replacement')
-                            ? '新的译文。'
-                            : '预测 RNA 的几何结构。\n\n后面还有一句话。';
-                    return done({
-                        url: request.message.options.url,
-                        status: 200,
-                        headers: {},
-                        data: JSON.stringify({ choices: [{ message: { content } }] }),
-                    });
+                if (request.cmd === 'tauri' && request.__tauriModule === 'Event' && request.message.event === 'selection_changed') {
+                    if (request.message.cmd === 'listen') {
+                        listeners.set(1000, request.message);
+                        return done(1000);
+                    }
                 }
                 return base(request);
             };
-        },
-        { options }
-    );
-}
+        });
+        const serve = async (page) => {
+            const dist = path.resolve(__dirname, '../dist');
+            await page.route('http://127.0.0.1:43827/**', async (route) => {
+                const pathname = new URL(route.request().url()).pathname;
+                const file = path.resolve(dist, pathname === '/' ? 'index.html' : pathname.slice(1));
+                assert.ok(file.startsWith(dist + path.sep));
+                const contentType = ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' })[path.extname(file)] || 'application/octet-stream';
+                await route.fulfill({ contentType, body: await fs.readFile(file) });
+            });
+            await page.goto('http://127.0.0.1:43827/');
+        };
+        await serve(badge);
+        const trigger = badge.getByRole('button', { name: '翻译选中文字', exact: true });
+        await trigger.waitFor();
+        assert.equal(await badge.evaluate(() => window.__openCount), 0);
+        assert.equal(await badge.locator('textarea, .selection-result-window').count(), 0);
+        await trigger.click();
+        await badge.waitForFunction(() => document.querySelector('.selection-badge').title.includes('重新划词'));
+        assert.equal(await trigger.innerText(), '!');
+        await badge.evaluate(() => { window.__captureFails = false; });
+        await trigger.click();
+        await badge.waitForFunction(() => !document.querySelector('.selection-badge'));
+        assert.equal(await badge.evaluate(() => window.__openCount), 2);
 
-async function verifySelection() {
-    const browser = await chromium.launch({
-        headless: true,
-        executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    });
-    const context = await browser.newContext({ viewport: { width: 300, height: 400 } });
-    if (process.env.UI_DIST === '1') {
-        const dist = path.resolve(__dirname, '../dist');
-        await context.route('http://pot-ui.invalid/**', async (route) => {
-            const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-            const file = path.resolve(dist, path.extname(pathname) ? pathname.slice(1) : 'index.html');
-            assert.ok(file.startsWith(dist + path.sep));
-            const contentType =
-                { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' }[
-                    path.extname(file)
-                ] || 'application/octet-stream';
-            await route.fulfill({ contentType, body: await fs.readFile(file) });
+        const popup = await browser.newPage({ viewport: { width: 600, height: 720 } });
+        popup.on('pageerror', (error) => errors.push(error.message));
+        await installMock(popup, { label: 'translate' });
+        await popup.addInitScript(() => {
+            const base = window.__TAURI_IPC__;
+            window.__source = 'Selected document text.';
+            window.__translations = [];
+            const listeners = new Map();
+            window.__nextText = (text) => {
+                window.__source = text;
+                for (const [id, listener] of listeners) window[`_${listener.handler}`]?.({ id, event: 'new_text', payload: text });
+            };
+            window.__TAURI_IPC__ = (request) => {
+                const done = (value) => window[`_${request.callback}`]?.(value);
+                if (request.cmd === 'get_text') return done(window.__source);
+                if (request.cmd === 'plugin:store|get' && request.key === 'history_disable') return done(true);
+                if (request.cmd === 'tauri' && request.__tauriModule === 'Event' && request.message.event === 'new_text' && request.message.cmd === 'listen') {
+                    listeners.set(1001, request.message);
+                    return done(1001);
+                }
+                if (request.cmd === 'tauri' && request.__tauriModule === 'Http' && request.message.cmd === 'httpRequest') {
+                    const body = request.message.options.body.payload;
+                    const prompt = body.messages.at(-1).content;
+                    window.__translations.push(prompt);
+                    return done({ status: 200, headers: {}, data: JSON.stringify({ choices: [{ message: { content: '模拟译文' } }] }) });
+                }
+                return base(request);
+            };
         });
-    }
-    const page = await context.newPage();
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    const url = process.env.UI_DIST === '1' ? 'http://pot-ui.invalid' : process.env.UI_URL || 'http://127.0.0.1:5175';
-    try {
-        await fixture(page);
-        await page.goto(url);
-        await page.getByRole('button', { name: '翻译选中文字' }).waitFor();
-        if (process.env.SELECTION_BADGE_PREVIEW) await page.locator('.selection-badge').screenshot({ path: process.env.SELECTION_BADGE_PREVIEW, omitBackground: true });
-        const badge = await page.getByRole('button', { name: '翻译选中文字' }).boundingBox();
-        assert.equal(badge.width, 40);
-        assert.equal(badge.height, 40);
-        assert.equal(await page.locator('.selection-badge').evaluate(n => getComputedStyle(n).borderRadius), '50%');
-        for (const selector of ['html', 'body', '#root']) {
-            assert.equal(await page.locator(selector).evaluate(n => getComputedStyle(n).backgroundColor), 'rgba(0, 0, 0, 0)');
-        }
-        assert.equal(await page.evaluate(() => window.__selectionFixture.requests.length), 0);
-        await page.getByRole('button', { name: '翻译选中文字' }).click();
-        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button[aria-label="复制译文"]').disabled);
-        assert.equal(await page.locator('.selection-paragraph').count(), 3);
-        assert.equal(
-            await page.locator('.selection-paragraph').nth(1).textContent(),
-            '预测 RNA 的几何结构。 后面还有一句话。'
-        );
-        assert.equal(await page.locator('.selection-translations br').count(), 0);
-        assert.equal(
-            await page
-                .locator('.selection-paragraph')
-                .first()
-                .evaluate((n) => getComputedStyle(n).fontWeight),
-            '700'
-        );
-        assert.equal(
-            await page
-                .locator('.selection-paragraph')
-                .nth(1)
-                .evaluate((n) => getComputedStyle(n).fontStyle),
-            'italic'
-        );
-        assert.equal(
-            await page
-                .locator('.selection-paragraph')
-                .nth(1)
-                .evaluate((n) => getComputedStyle(n).whiteSpace),
-            'normal'
-        );
-        assert.doesNotMatch(await page.locator('body').innerText(), /The geome|Second source|Results/);
-        assert.equal(await page.getByRole('combobox', { name: '当前翻译服务' }).inputValue(), 'openai@test');
-        assert.equal(await page.getByRole('slider').count(), 0);
-        await page.waitForTimeout(250);
-        const initialSize = await page.locator('.selection-result-window').boundingBox();
-        assert.equal(initialSize.width, 300);
-        assert.ok(initialSize.height >= 400 && initialSize.height <= 624);
-        for (const button of await page.locator('.selection-toolbar button').all()) {
-            const bounds = await button.boundingBox();
-            assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 300, JSON.stringify(bounds));
-        }
-        const requests = await page.evaluate(() => window.__selectionFixture.requests);
-        assert.equal(requests.length, 3);
-        assert.match(
-            requests[1].body.payload.messages.at(-1).content,
-            /geometrical RNA structure is predicted\. Another sentence follows\./
-        );
-        assert.match(requests[0].body.payload.messages[0].content, /untrusted data/);
-        await page.getByRole('combobox', {name: '当前翻译服务'}).selectOption('openai@second');
-        await page.waitForFunction(() => window.__selectionFixture.requests.length === 6 && !document.querySelector('button[aria-label="复制译文"]').disabled);
-        await page.waitForFunction(() => window.__selectionFixture.settings.selection_translate_service === 'openai@second');
-        assert.equal(await page.getByRole('combobox', {name: '当前翻译服务'}).inputValue(), 'openai@second');
-
-        assert.equal(await page.evaluate(() => window.__selectionFixture.speechCalls.length), 0);
-        await page.getByRole('button', {name: '朗读选中原文'}).click();
-        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 1);
-        const speech = await page.evaluate(() => window.__selectionFixture.speechCalls[0]);
-        assert.match(speech.text, /geometrical RNA structure/);
-        assert.doesNotMatch(speech.text, /预测|第二段译文/);
-        assert.equal(speech.lang, 'en-US');
-        assert.equal(speech.config.apiKey, 'fixture-voice-key');
-        assert.equal(speech.hasUtils, true);
-        await page.getByRole('button', {name: '停止朗读'}).click();
-        assert.equal(await page.evaluate(() => window.__selectionFixture.audioStops), 1);
-        await page.evaluate(() => {window.__selectionFixture.holdSpeech = true;});
-        await page.getByRole('button', {name: '朗读选中原文'}).click();
-        await page.waitForFunction(() => window.__selectionFixture.speechReleases.length === 1);
-        await page.getByRole('button', {name: '停止朗读'}).click();
-        await page.evaluate(() => {window.__selectionFixture.holdSpeech = false; window.__selectionFixture.speechReleases[0]();});
-        await page.waitForTimeout(100);
-        assert.equal(await page.evaluate(() => window.__selectionFixture.audioStarts), 1);
-        await page.evaluate(() => {window.__selectionFixture.failSpeech = true;});
-        await page.getByRole('button', {name: '朗读选中原文'}).click();
-        await page.getByRole('alert').filter({hasText: 'fixture synthesis error'}).waitFor();
-        await page.evaluate(() => {window.__selectionFixture.failSpeech = false;});
-        await page.getByRole('button', {name: '朗读选中原文'}).click();
-        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 2);
-        await page.evaluate(() => window.__selectionFixture.audioSource.onended());
-        await page.getByRole('button', {name: '朗读选中原文'}).waitFor();
-        await page.getByRole('button', { name: '窗口置顶', exact: true }).click();
-        assert.equal(await page.getByRole('button', { name: '取消窗口置顶' }).getAttribute('aria-pressed'), 'true');
-        assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), true);
-        if (process.env.SELECTION_PIN_PREVIEW) await page.screenshot({ path: process.env.SELECTION_PIN_PREVIEW, omitBackground: true });
-        await page.getByRole('button', { name: '取消窗口置顶' }).click();
-        assert.equal(await page.evaluate(() => window.__selectionFixture.pinned), false);
-        await page.getByRole('button', { name: '复制译文' }).click();
-        assert.equal(
-            await page.evaluate(() => window.__fixture.clipboard),
-            '结果\n\n预测 RNA 的几何结构。 后面还有一句话。\n\n第二段译文。'
-        );
-        await page.screenshot({ path: path.resolve('../.work/selection324-preview.png') });
-
-        await page.getByRole('button', {name: '朗读选中原文'}).click();
-        await page.waitForFunction(() => window.__selectionFixture.audioStarts === 3);
-        const stopsBeforeSelection = await page.evaluate(() => window.__selectionFixture.audioStops);
-        await page.evaluate(async () => {
-            window.__selectionFixture.fail = true;
-            await window.__setSelection({ id: 2, mode: 'result', runs: [{ text: 'failure source' }] });
-        });
-        await page.getByRole('alert').filter({ hasText: 'fixture network error' }).waitFor();
-        assert.ok(await page.evaluate(() => window.__selectionFixture.audioStops) > stopsBeforeSelection);
-        await page.getByRole('button', {name: '朗读选中原文'}).waitFor();
-        assert.doesNotMatch(await page.locator('body').innerText(), /failure source/);
-        await page.evaluate(() => {
-            window.__selectionFixture.fail = false;
-        });
-        await page.getByRole('button', { name: '重试' }).click();
-        await page.waitForFunction(() => !document.querySelector('.selection-toolbar button[aria-label="复制译文"]').disabled);
-
-        await page.evaluate(async () => {
-            window.__selectionFixture.hold = true;
-            await window.__setSelection({ id: 3, mode: 'result', runs: [{ text: 'stale source' }] });
-        });
-        await page.waitForFunction(() => window.__selectionFixture.releases.length === 1);
-        await page.evaluate(async () => {
-            window.__selectionFixture.hold = false;
-            await window.__setSelection({ id: 4, mode: 'result', runs: [{ text: 'replacement source' }] });
-        });
-        await page.getByText('新的译文。', { exact: true }).waitFor();
-        await page.evaluate(() => window.__selectionFixture.releases[0]());
-        await page.waitForTimeout(100);
-        assert.equal(await page.locator('.selection-translations').innerText(), '新的译文。');
-        await page.waitForTimeout(200);
-        const shortSize = await page.locator('.selection-result-window').boundingBox();
-        await page.evaluate(async () => {
-            window.__selectionFixture.sourceRuns = [];
-            await window.__setSelection({ id: 44, mode: 'result', runs: [{text: Array.from({length: 80}, (_, i) => 'replacement source ' + i).join('\n\n')}] });
-        });
-        await page.waitForFunction(() => document.querySelectorAll('.selection-paragraph').length === 80);
-        await page.waitForTimeout(250);
-        const longSize = await page.locator('.selection-result-window').boundingBox();
-        assert.ok(longSize.height > shortSize.height || longSize.width > shortSize.width, JSON.stringify({shortSize,longSize}));
-        assert.ok(longSize.width <= 480 && longSize.height <= 624);
-        assert.equal(await page.locator('.selection-content').evaluate(n => n.scrollHeight > n.clientHeight), true);
-        assert.ok(await page.evaluate(() => window.__selectionFixture.sizes?.length > 0));
-        // Changes to the remembered default must not retranslate existing windows.
-        const beforeDefaultChange = await page.evaluate(() => window.__selectionFixture.requests.length);
-        await page.evaluate(() => window.__TAURI_IPC__({cmd: 'tauri', __tauriModule: 'Event', message: {cmd: 'emit', event: 'selection_translate_service_changed', payload: 'openai@test'}, callback: 0, error: 0}));
-        await page.waitForTimeout(150);
-        assert.equal(await page.evaluate(() => window.__selectionFixture.requests.length), beforeDefaultChange);
-        await page.setViewportSize({ width: 320, height: 240 });
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-        await page.getByRole('button', { name: '关闭划词翻译' }).click();
-        await page.waitForFunction(() => !document.querySelector('.selection-result-window'));
+        await serve(popup);
+        const source = popup.locator('textarea').first();
+        await source.waitFor();
+        await popup.waitForFunction(() => document.querySelector('textarea')?.value === 'Selected document text.');
+        await popup.getByText('模拟译文', { exact: true }).first().waitFor();
+        await popup.getByRole('button', { name: '常规翻译', exact: true }).waitFor();
+        assert.equal(await popup.locator('.selection-result-window, .selection-options').count(), 0);
+        assert.ok(await popup.getByText('专业翻译', { exact: true }).count());
+        assert.ok(await popup.getByText('备用服务', { exact: true }).count());
+        await popup.evaluate(() => window.__nextText('Another selection.'));
+        await popup.waitForFunction(() => document.querySelector('textarea')?.value === 'Another selection.');
+        await popup.waitForFunction(() => window.__translations.some((text) => text.includes('Another selection.')));
         assert.deepEqual(errors, []);
-
-        const remembered = await context.newPage();
-        await fixture(remembered, { result: true, opacity: 60, label: 'selection_translate_42' });
-        await remembered.goto(url);
-        await remembered.waitForFunction(() => document.querySelector('.selection-result-window')?.style.getPropertyValue('--selection-opacity') === '0.6');
-        assert.match(await remembered.locator('.selection-result-window').evaluate(n => getComputedStyle(n).backgroundColor), /0\.6\)$/);
-        assert.equal(await remembered.locator('html').evaluate(n => getComputedStyle(n).backgroundColor), 'rgba(0, 0, 0, 0)');
-        await remembered.keyboard.press('Escape');
-        await remembered.waitForFunction(() => !document.querySelector('.selection-result-window'));
-        await remembered.close();
-        const noVoice = await context.newPage();
-        await fixture(noVoice, { result: true, noTts: true });
-        await noVoice.goto(url);
-        await noVoice.getByRole('button', {name: '朗读选中原文'}).click();
-        await noVoice.getByRole('alert').filter({hasText: '启用语音合成服务'}).waitFor();
-        await noVoice.close();
-        const empty = await context.newPage();
-        await fixture(empty, { result: true, noService: true });
-        await empty.goto(url);
-        await empty.getByRole('alert').filter({ hasText: '启用文本翻译服务' }).waitFor();
-        assert.doesNotMatch(await empty.locator('body').innerText(), /The geome|Second source|Results/);
-        await empty.close();
-
-        const deferred = await context.newPage();
-        await deferred.setViewportSize({ width: 520, height: 360 });
-        await fixture(deferred, { deferred: true });
-        await deferred.goto(url);
-        await deferred.getByRole('button', { name: '翻译选中文字' }).waitFor();
-        assert.equal(await deferred.evaluate(() => window.__selectionFixture.requests.length), 0);
-        await deferred.evaluate(() => {
-            window.__selectionFixture.holdCapture = true;
-        });
-        await deferred.getByRole('button', { name: '翻译选中文字' }).click();
-        await deferred.waitForFunction(() => window.__selectionFixture.captureReleases.length === 1);
-        await deferred.getByRole('status').filter({ hasText: '正在读取选中文字' }).waitFor();
-        assert.equal(await deferred.getByRole('button', { name: '复制译文' }).isDisabled(), true);
-        assert.equal(await deferred.getByRole('button', { name: '朗读选中原文' }).isDisabled(), true);
-        assert.doesNotMatch(await deferred.locator('body').innerText(), /The geome|Second source|Results/);
-        assert.equal(await deferred.evaluate(() => window.__selectionFixture.requests.length), 0);
-        await deferred.evaluate(() => {
-            window.__selectionFixture.holdCapture = false;
-            window.__selectionFixture.captureFail = true;
-            window.__selectionFixture.captureReleases[0]();
-        });
-        await deferred.getByRole('alert').filter({ hasText: '未读取到选中文字' }).waitFor();
-        assert.equal(await deferred.evaluate(() => window.__selectionFixture.requests.length), 0);
-        await deferred.evaluate(() => {
-            window.__selectionFixture.captureFail = false;
-        });
-        await deferred.getByRole('button', { name: '重试' }).click();
-        await deferred.getByText('第二段译文。', { exact: true }).waitFor();
-        assert.doesNotMatch(await deferred.locator('body').innerText(), /The geome|Second source|Results|未读取到/);
-        await deferred.keyboard.press('Escape');
-        await deferred.waitForFunction(() => !document.querySelector('.selection-result-window'));
-        await deferred.close();
-
-        const settings = await context.newPage();
-        await settings.setViewportSize({ width: 1000, height: 750 });
-        await fixture(settings, { config: true });
-        await settings.goto(`${url}/selection`);
-        await settings.waitForURL('**/translate');
-        assert.equal(await settings.getByRole('button', { name: '划词翻译', exact: true }).count(), 0);
-        await settings.getByRole('switch', { name: '启用划词翻译按钮' }).focus();
-        await settings.getByRole('switch', { name: '启用划词翻译按钮' }).press('Space');
-        await settings.waitForFunction(() => window.__selectionFixture.enabled === false);
-        assert.equal(await settings.evaluate(() => window.__selectionFixture.enabled), false);
-        await settings.getByRole('status').filter({ hasText: '划词翻译已关闭' }).waitFor();
-        await settings.getByLabel('划词翻译服务', { exact: true }).selectOption('openai@second');
-        await settings.getByLabel('划词目标语言', { exact: true }).selectOption('en');
-        await settings.waitForFunction(
-            () =>
-                window.__selectionFixture.settings.selection_translate_service === 'openai@second' &&
-                window.__selectionFixture.settings.selection_target_language === 'en'
-        );
-        await settings.getByRole('button', { name: '启用划词翻译', exact: true }).click();
-        await settings.getByRole('status').filter({ hasText: '划词监听已就绪' }).waitFor();
-        await settings.evaluate(() => {
-            window.__selectionFixture.listening = false;
-        });
-        await settings.getByRole('alert').filter({ hasText: '监听尚未就绪' }).waitFor();
-        await settings.goto(`${url}/general`);
-        const opacity = settings.getByRole('slider', {name: '划词翻译窗口背景不透明度'});
-        await opacity.waitFor();
-        const order = await settings.evaluate(() => {
-            const rows = Array.from(document.querySelectorAll('.config-item'));
-            return [rows.findIndex(n => n.textContent.includes('背景材质')), rows.findIndex(n => n.textContent.includes('划词翻译窗口背景不透明度'))];
-        });
-        assert.equal(order[1], order[0] + 1);
-        await opacity.fill('55');
-        await settings.waitForFunction(() => window.__selectionFixture.settings.selection_window_opacity === 55 && window.__selectionFixture.saved);
-        assert.equal(await settings.locator('output').last().textContent(), '55%');
-        await settings.screenshot({path: path.resolve('../.work/selection324-settings.png')});
-        await settings.close();
-        console.log(
-            'Selection UI passed: deferred selection badge, no transmission before click, capture failure/retry, listener diagnostics, translation only, paragraphs/font styles, PDF restoration, copy, stale result isolation, default 300x400 layout, content-driven growth, bounded scrolling, dynamic window labels, per-window service choice, dismiss and settings.'
-        );
-    } catch (error) {
-        console.error(await page.locator('body').innerText());
-        throw error;
-    } finally {
-        await browser.close();
-    }
-}
-module.exports = { fixture };
-if (require.main === module) verifySelection().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+        console.log('Selection UI passed: deferred badge, capture failure and retry, legacy source/language/multi-service window, repeated selections, removed translation-only layout.');
+    } finally { await browser.close(); }
+})().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -1,7 +1,6 @@
 use crate::{config, APP};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
@@ -9,15 +8,9 @@ use std::sync::{
 use tauri::Manager;
 
 const BADGE_LABEL: &str = "selection_translate";
-const RESULT_PREFIX: &str = "selection_translate_";
-const RESULT_WIDTH: f64 = 300.0;
-const RESULT_HEIGHT: f64 = 400.0;
 static ENABLED: AtomicBool = AtomicBool::new(true);
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static CURRENT: Lazy<Mutex<Option<Selection>>> = Lazy::new(|| Mutex::new(None));
-// The reusable badge owns only the pending selection. Each result keeps its own
-// payload until its native window is destroyed, including while retrying capture.
-static RESULTS: Lazy<Mutex<HashMap<String, Selection>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static LAST_ERROR: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
 static LISTENING: AtomicBool = AtomicBool::new(false);
 static POLLING: AtomicBool = AtomicBool::new(false);
@@ -45,7 +38,6 @@ pub struct TextRun {
 pub struct Selection {
     id: u64,
     mode: String,
-    runs: Vec<TextRun>,
     x: i32,
     y: i32,
     #[serde(skip)]
@@ -54,8 +46,7 @@ pub struct Selection {
     capture_error: Option<String>,
 }
 
-fn set_badge_activation(window: &tauri::Window, badge: bool) {
-    #[cfg(target_os = "windows")]
+fn set_badge_activation(window: &tauri::Window) {
     unsafe {
         use windows::Win32::{
             Foundation::HWND,
@@ -66,162 +57,104 @@ fn set_badge_activation(window: &tauri::Window, badge: bool) {
         if let Ok(handle) = window.hwnd() {
             let hwnd = HWND(handle.0 as *mut _);
             let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-            let flag = WS_EX_NOACTIVATE.0 as isize;
-            SetWindowLongPtrW(
-                hwnd,
-                GWL_EXSTYLE,
-                if badge { style | flag } else { style & !flag },
-            );
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE.0 as isize);
         }
     }
 }
 
-fn show_selection_window(window: &tauri::Window, result: bool) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    if !result {
-        // Tauri show() may activate an existing window. A badge must preserve
-        // the source application's focus and selection on every appearance.
-        use windows::Win32::{
-            Foundation::HWND,
-            UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE},
-        };
-        let handle = window.hwnd().map_err(|e| e.to_string())?;
-        unsafe {
-            let _ = ShowWindow(HWND(handle.0 as *mut _), SW_SHOWNOACTIVATE);
-        }
-        return Ok(());
+fn show_badge(window: &tauri::Window) -> Result<(), String> {
+    // Preserve the source application's focus until selection capture finishes.
+    use windows::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE},
+    };
+    let handle = window.hwnd().map_err(|e| e.to_string())?;
+    unsafe {
+        let _ = ShowWindow(HWND(handle.0 as *mut _), SW_SHOWNOACTIVATE);
     }
-    window.show().map_err(|e| e.to_string())
+    Ok(())
 }
 
 fn selection_window() -> Result<tauri::Window, String> {
-    create_window(BADGE_LABEL, false)
-}
-
-fn create_window(label: &str, result: bool) -> Result<tauri::Window, String> {
     let app = APP.get().unwrap();
-    if let Some(window) = app.get_window(label) {
+    if let Some(window) = app.get_window(BADGE_LABEL) {
         return Ok(window);
     }
-    tauri::WindowBuilder::new(
-        app,
-        label,
-        tauri::WindowUrl::App("index.html".into()),
-    )
-    // WebView2 windows sharing a user-data directory must use the same browser
-    // options. Match daemon/config; otherwise creation fails asynchronously and
-    // Tauri retains an unusable window handle (FailedToReceiveMessage).
-    .additional_browser_args("--disable-web-security")
-    .title("划词翻译")
-    .decorations(false)
-    .transparent(true)
-    .visible(false)
-    .focused(false)
-    .skip_taskbar(true)
-    .always_on_top(!result)
-    .resizable(true)
-    .inner_size(if result { RESULT_WIDTH } else { 40.0 }, if result { RESULT_HEIGHT } else { 40.0 })
-    .build()
-    .map_err(|e| e.to_string())
+    // Match the browser options of the other WebView2 windows sharing this profile.
+    tauri::WindowBuilder::new(app, BADGE_LABEL, tauri::WindowUrl::App("index.html".into()))
+        .additional_browser_args("--disable-web-security")
+        .title("划词翻译")
+        .decorations(false)
+        .transparent(true)
+        .visible(false)
+        .focused(false)
+        .skip_taskbar(true)
+        .always_on_top(true)
+        .resizable(false)
+        .inner_size(40.0, 40.0)
+        .build()
+        .map_err(|e| e.to_string())
 }
 
-fn position_window(window: &tauri::Window, x: i32, y: i32, result: bool) {
+fn position_badge(window: &tauri::Window, x: i32, y: i32) {
     let monitors = window.available_monitors().unwrap_or_default();
-    let monitor = monitors.iter().find(|m| {
+    if let Some(monitor) = monitors.iter().find(|m| {
         let p = m.position();
         let s = m.size();
         x >= p.x && y >= p.y && x < p.x + s.width as i32 && y < p.y + s.height as i32
-    });
-    if let Some(m) = monitor {
-        let dpi = m.scale_factor();
-        let width = ((if result { RESULT_WIDTH } else { 40.0 }) * dpi).min((m.size().width as f64 - 24.0).max(1.0));
-        let height = ((if result { RESULT_HEIGHT } else { 40.0 }) * dpi).min((m.size().height as f64 - 64.0).max(1.0));
-        let p = m.position();
-        let left = (x + (12.0 * dpi) as i32)
-            .clamp(p.x + 8, p.x + m.size().width as i32 - width as i32 - 8);
-        let top = (y + (14.0 * dpi) as i32)
-            .clamp(p.y + 8, p.y + m.size().height as i32 - height as i32 - 48);
+    }) {
+        let dpi = monitor.scale_factor();
+        let size = monitor.size();
+        let origin = monitor.position();
+        let width = (40.0 * dpi).min((size.width as f64 - 24.0).max(1.0));
+        let height = (40.0 * dpi).min((size.height as f64 - 64.0).max(1.0));
+        let left = (x + (12.0 * dpi) as i32).clamp(
+            origin.x + 8,
+            origin.x + size.width as i32 - width as i32 - 8,
+        );
+        let top = (y + (14.0 * dpi) as i32).clamp(
+            origin.y + 8,
+            origin.y + size.height as i32 - height as i32 - 48,
+        );
         let _ = window.set_size(tauri::PhysicalSize::new(width, height));
         let _ = window.set_position(tauri::PhysicalPosition::new(left, top));
     }
 }
 
-fn publish(
-    runs: Vec<TextRun>,
-    x: i32,
-    y: i32,
-    result: bool,
-    source_window: isize,
-) -> Result<u64, String> {
-    if result && runs.iter().all(|r| r.text.trim().is_empty()) {
-        return Err("请先选中需要翻译的文字。".into());
-    }
-    if runs.iter().map(|r| r.text.chars().count()).sum::<usize>() > 20_000 {
-        return Err("一次最多翻译 20000 个字符，请缩小选择范围。".into());
-    }
+fn publish(x: i32, y: i32, source_window: isize) -> Result<u64, String> {
     let payload = Selection {
         id: NEXT_ID.fetch_add(1, Ordering::SeqCst),
-        mode: if result { "result" } else { "badge" }.into(),
-        runs,
+        mode: "badge".into(),
         x,
         y,
         source_window,
         capture_error: None,
     };
-    let window = if result {
-        create_result(&payload)?
-    } else {
-        let window = selection_window()?;
-        *CURRENT.lock().unwrap() = Some(payload.clone());
-        window
-    };
-    window.set_always_on_top(!result).map_err(|e| e.to_string())?;
-    position_window(&window, x, y, result);
-    set_badge_activation(&window, !result);
+    let window = selection_window()?;
+    *CURRENT.lock().unwrap() = Some(payload.clone());
+    position_badge(&window, x, y);
+    set_badge_activation(&window);
     let _ = window.emit("selection_changed", &payload);
-    show_selection_window(&window, result)?;
-    if result {
-        let _ = window.set_focus();
-    }
+    show_badge(&window)?;
     Ok(payload.id)
 }
 
 #[tauri::command]
-pub fn selection_payload(window: tauri::Window) -> Option<Selection> {
-    if window.label() == BADGE_LABEL {
-        CURRENT.lock().unwrap().clone()
-    } else {
-        RESULTS.lock().unwrap().get(window.label()).cloned()
-    }
-}
-
-#[tauri::command]
-pub async fn selection_open(window: tauri::Window, id: u64) -> Result<(), String> {
-    open_selection(window.label(), id).await
-}
-
-fn create_result(payload: &Selection) -> Result<tauri::Window, String> {
-    let label = format!("{RESULT_PREFIX}{}", payload.id);
-    RESULTS.lock().unwrap().insert(label.clone(), payload.clone());
-    match create_window(&label, true) {
-        Ok(window) => Ok(window),
-        Err(error) => {
-            RESULTS.lock().unwrap().remove(&label);
-            Err(error)
-        }
-    }
+pub fn selection_payload() -> Option<Selection> {
+    CURRENT.lock().unwrap().clone()
 }
 
 fn capture_pending(id: u64) -> bool {
-    CURRENT.lock().unwrap().as_ref().is_some_and(|s| s.id == id && s.mode == "capturing")
-        || RESULTS.lock().unwrap().get(&format!("{RESULT_PREFIX}{id}"))
-            .is_some_and(|s| s.mode == "capturing")
+    CURRENT
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|s| s.id == id && s.mode == "capturing")
 }
 
-async fn open_selection(label: &str, id: u64) -> Result<(), String> {
-    let (mut payload, window) = if label == BADGE_LABEL {
-        // Capture using the preloaded, nonactivating badge. Creating a fresh
-        // WebView before capture can disturb the source document's selection.
+#[tauri::command]
+pub async fn selection_open(id: u64) -> Result<(), String> {
+    let payload = {
         let mut state = CURRENT.lock().unwrap();
         let pending = state
             .as_mut()
@@ -231,137 +164,51 @@ async fn open_selection(label: &str, id: u64) -> Result<(), String> {
             return Err("正在读取选中文字，请稍候。".into());
         }
         pending.mode = "capturing".into();
-        let mut payload = pending.clone();
-        payload.mode = "capturing".into();
-        drop(state);
-        let window = selection_window()?;
-        position_window(&window, payload.x, payload.y, true);
-        (payload, window)
-    } else {
-        let mut results = RESULTS.lock().unwrap();
-        let pending = results.get_mut(label).filter(|s| s.id == id)
-            .ok_or("划词窗口已关闭，请重新划词。")?;
-        if pending.mode == "capturing" {
-            return Err("正在读取选中文字，请稍候。".into());
-        }
-        pending.mode = "capturing".into();
         pending.capture_error = None;
-        let payload = pending.clone();
-        drop(results);
-        let window = APP.get().unwrap().get_window(label).ok_or("划词窗口已关闭。")?;
-        (payload, window)
+        pending.clone()
     };
-    payload.capture_error = None;
-    // Show progress immediately without activating the popup: activating here
-    // would move focus away from the document before UIA/clipboard capture.
-    set_badge_activation(&window, true);
+    let window = selection_window()?;
     let _ = window.emit("selection_changed", &payload);
-    show_selection_window(&window, false)?;
-    if payload.runs.is_empty() {
-        #[cfg(target_os = "windows")]
-        {
-            let source = payload.source_window;
-            let point = (payload.x, payload.y);
-            // The badge is nonactivating. Read/copy from the saved source app,
-            // never the translation WebView. Clipboard fallback needs an explicit click.
-            match tauri::async_runtime::spawn_blocking(move || {
-                if !capture_pending(id) {
-                    return Err("选中文字已失效，请重新划词。".into());
-                }
-                platform::read_on_request(source, point, id)
-            })
-            .await
-            {
-                Ok(Ok(runs)) => payload.runs = runs,
-                Ok(Err(error)) => payload.capture_error = Some(error),
-                Err(error) => {
-                    payload.capture_error = Some(format!("取词失败，请重新划词：{error}"))
-                }
-            }
-        }
-    }
-    payload.mode = "result".into();
-    let window = if window.label() == BADGE_LABEL {
-        if CURRENT.lock().unwrap().as_ref().map(|s| s.id) != Some(id) {
+    let captured = tauri::async_runtime::spawn_blocking(move || {
+        if !capture_pending(id) {
             return Err("选中文字已失效，请重新划词。".into());
         }
-        let result = match create_result(&payload) {
-            Ok(result) => result,
-            Err(error) => {
-                let restored = {
-                    let mut current = CURRENT.lock().unwrap();
-                    current.as_mut().filter(|s| s.id == id).map(|pending| {
-                        pending.mode = "badge".into();
-                        pending.clone()
-                    })
-                };
-                if let Some(pending) = restored {
-                    position_window(&window, pending.x, pending.y, false);
-                    let _ = window.emit("selection_changed", pending);
-                }
-                return Err(error);
+        platform::read_on_request(payload.source_window, (payload.x, payload.y), id)
+    })
+    .await
+    .map_err(|e| format!("取词失败，请重新划词：{e}"))
+    .and_then(|result| result);
+    if !capture_pending(id) {
+        return Err("选中文字已失效，请重新划词。".into());
+    }
+    match captured {
+        Ok(runs) => {
+            let text: String = runs.into_iter().map(|run| run.text).collect();
+            // Badge clicks and shortcuts share the original translation window.
+            dismiss_badge(Some(id));
+            crate::window::text_translate(text);
+            Ok(())
+        }
+        Err(error) => {
+            let restored = {
+                let mut state = CURRENT.lock().unwrap();
+                state.as_mut().filter(|s| s.id == id).map(|pending| {
+                    pending.mode = "badge".into();
+                    pending.capture_error = Some(error.clone());
+                    pending.clone()
+                })
+            };
+            if let Some(payload) = restored {
+                let _ = window.emit("selection_changed", payload);
             }
-        };
-        dismiss_badge(Some(id));
-        position_window(&result, payload.x, payload.y, true);
-        result
-    } else {
-        let mut results = RESULTS.lock().unwrap();
-        let state = results.get_mut(window.label()).filter(|s| s.id == id)
-            .ok_or("划词窗口已关闭，请重新划词。")?;
-        *state = payload.clone();
-        drop(results);
-        window
-    };
-    set_badge_activation(&window, false);
-    let _ = window.emit("selection_changed", payload);
-    let _ = window.show();
-    let _ = window.set_focus();
-    Ok(())
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]
-pub fn selection_resize(window: tauri::Window, id: u64, width: f64, height: f64) -> Result<(f64, f64), String> {
-    if !RESULTS.lock().unwrap().get(window.label()).is_some_and(|s| s.id == id) {
-        return Err("划词窗口已变化。".into());
-    }
-    if !width.is_finite() || !height.is_finite() { return Err("无效的窗口尺寸。".into()); }
-    let monitor = window.current_monitor().map_err(|e| e.to_string())?
-        .ok_or("无法读取显示器尺寸。")?;
-    let dpi = monitor.scale_factor();
-    let size = monitor.size();
-    let w = (width.max(RESULT_WIDTH) * dpi).min((size.width as f64 - 32.0 * dpi).max(40.0));
-    let h = (height.max(RESULT_HEIGHT) * dpi).min((size.height as f64 - 96.0 * dpi).max(40.0));
-    let pos = window.outer_position().map_err(|e| e.to_string())?;
-    let origin = monitor.position();
-    let x = pos.x.max(origin.x + 8).min((origin.x + size.width as i32 - w.ceil() as i32 - 8).max(origin.x));
-    let y = pos.y.max(origin.y + 8).min((origin.y + size.height as i32 - h.ceil() as i32 - 64).max(origin.y));
-    window.set_size(tauri::PhysicalSize::new(w, h)).map_err(|e| e.to_string())?;
-    window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
-    Ok((w / dpi, h / dpi))
-}
-
-#[tauri::command]
-pub fn selection_set_pinned(window: tauri::Window, id: u64, pinned: bool) -> Result<(), String> {
-    if !RESULTS.lock().unwrap().get(window.label()).is_some_and(|s| s.id == id) {
-        return Err("划词窗口已变化，请重新操作。".into());
-    }
-    window.set_always_on_top(pinned).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn selection_dismiss(window: tauri::Window) -> Result<(), String> {
-    if window.label() == BADGE_LABEL {
-        dismiss_badge(None);
-    } else if window.label().starts_with(RESULT_PREFIX) {
-        window.close().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-pub fn forget_result(label: &str) {
-    RESULTS.lock().unwrap().remove(label);
+pub fn selection_dismiss() {
+    dismiss_badge(None);
 }
 
 pub fn dismiss_badge(expected_id: Option<u64>) {
@@ -373,7 +220,6 @@ pub fn dismiss_badge(expected_id: Option<u64>) {
     drop(state);
     if let Some(window) = APP.get().unwrap().get_window("selection_translate") {
         let _ = window.emit("selection_changed", Option::<Selection>::None);
-        #[cfg(target_os = "windows")]
         if let Ok(handle) = window.hwnd() {
             // Also hide badges shown without changing Tauri's visible flag.
             use windows::Win32::{
@@ -390,7 +236,7 @@ pub fn dismiss_badge(expected_id: Option<u64>) {
 
 #[tauri::command]
 pub fn selection_status() -> serde_json::Value {
-    serde_json::json!({ "enabled": ENABLED.load(Ordering::Relaxed), "supported": cfg!(target_os = "windows"), "listening": LISTENING.load(Ordering::Relaxed) || POLLING.load(Ordering::Relaxed), "lastError": LAST_ERROR.lock().unwrap().clone(),
+    serde_json::json!({ "enabled": ENABLED.load(Ordering::Relaxed), "supported": true, "listening": LISTENING.load(Ordering::Relaxed) || POLLING.load(Ordering::Relaxed), "lastError": LAST_ERROR.lock().unwrap().clone(),
         "mouseEvents": MOUSE_EVENTS.load(Ordering::Relaxed), "gestures": GESTURES.load(Ordering::Relaxed), "badges": BADGES.load(Ordering::Relaxed), "lastReject": *LAST_REJECT.lock().unwrap() })
 }
 
@@ -404,40 +250,21 @@ pub fn selection_set_enabled(enabled: bool) {
 }
 
 pub fn from_shortcut() {
-    #[cfg(target_os = "windows")]
-    {
-        let source = platform::foreground_source();
-        let (x, y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
-            mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
-            _ => (0, 0),
-        };
-        // Use the same bounded capture and visible error/retry flow as the badge.
-        // Capture the document handle before opening any of our own windows.
-        match publish(vec![], x, y, false, source) {
-            Ok(id) => {
-                tauri::async_runtime::spawn(async move {
-                    if let Err(error) = open_selection(BADGE_LABEL, id).await {
-                        log::warn!("Selection shortcut: {error}");
-                    }
-                });
-            }
-            Err(error) => log::warn!("Selection shortcut: {error}"),
+    let source = platform::foreground_source();
+    let (x, y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
+        mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
+        _ => (0, 0),
+    };
+    match publish(x, y, source) {
+        Ok(id) => {
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = selection_open(id).await {
+                    log::warn!("Selection shortcut: {error}");
+                }
+            });
         }
+        Err(error) => log::warn!("Selection shortcut: {error}"),
     }
-    #[cfg(not(target_os = "windows"))]
-    std::thread::spawn(|| {
-        let runs = vec![TextRun {
-            text: selection::get_text(),
-            style: TextStyle::default(),
-        }];
-        let (x, y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
-            mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
-            _ => (0, 0),
-        };
-        if let Err(e) = publish(runs, x, y, true, 0) {
-            log::warn!("Selection translation: {}", e);
-        }
-    });
 }
 
 pub fn start() {
@@ -451,11 +278,9 @@ pub fn start() {
     if let Err(error) = selection_window() {
         *LAST_ERROR.lock().unwrap() = Some(error);
     }
-    #[cfg(target_os = "windows")]
     std::thread::spawn(platform::watch);
 }
 
-#[cfg(target_os = "windows")]
 mod platform {
     use super::*;
     use std::sync::mpsc::{self, SyncSender};
@@ -822,12 +647,15 @@ mod platform {
 
     fn over_popup(point: POINT) -> bool {
         for (label, window) in APP.get().unwrap().windows() {
-            if (label == BADGE_LABEL || label.starts_with(RESULT_PREFIX)) && window.is_visible().unwrap_or(false) {
+            if (label == BADGE_LABEL || label == "translate")
+                && window.is_visible().unwrap_or(false)
+            {
                 if let (Ok(p), Ok(s)) = (window.outer_position(), window.outer_size()) {
                     if point.x >= p.x
                         && point.y >= p.y
                         && point.x < p.x + s.width as i32
-                        && point.y < p.y + s.height as i32 {
+                        && point.y < p.y + s.height as i32
+                    {
                         return true;
                     }
                 }
@@ -1018,7 +846,7 @@ mod platform {
                     }
                     // Offer the action immediately, even for PDF viewers without
                     // UIA TextPattern. Read only after the user clicks Translate.
-                    match publish(vec![], event.point.x, event.point.y, false, event.source) {
+                    match publish(event.point.x, event.point.y, event.source) {
                         Ok(_) => {
                             BADGES.fetch_add(1, Ordering::Relaxed);
                             *LAST_REJECT.lock().unwrap() = "";

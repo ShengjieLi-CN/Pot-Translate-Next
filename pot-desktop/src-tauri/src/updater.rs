@@ -157,7 +157,6 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     if DOWNLOADING.load(Ordering::SeqCst) {return Err("请等待下载完成。".into());}
     let (path, digest) = INSTALLER.lock().unwrap().clone().ok_or("请先下载更新。")?;
     if file_digest(&path)? != digest {return Err("安装包已变化，校验失败，请重新下载。".into());}
-    #[cfg(target_os="windows")]
     {
         use std::os::windows::process::CommandExt;
         // Wait for UAC approval before exiting. A cancelled prompt leaves the app running.
@@ -171,8 +170,6 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
         app.exit(0);
         Ok(())
     }
-    #[cfg(not(target_os="windows"))]
-    { let _ = app; Err("仅支持 Windows 安装包。".into()) }
 }
 
 #[cfg(test)]

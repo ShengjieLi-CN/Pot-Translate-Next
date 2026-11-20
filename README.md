@@ -2,9 +2,9 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.7 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.7)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.4.0 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.4.0)
 
-3.3.7 默认使用火山 TTS，移除 Lingva 语音服务和“添加内置服务”入口，并修复长文朗读、服务失败切换及错误提示。当前源码 3.3.9 新增默认 RapidOCR 本地识别，同时保留 Paddle 官方云端选项；两者在“文字识别”页面配置。
+3.4.0 将划词按钮和快捷键统一接入旧版翻译窗口，保留原文编辑、语言选择和多服务译文卡片，并移除独立“仅译文”窗口及专属设置。仅面向 Windows。默认使用 RapidOCR 本地识别，同时保留 Paddle 官方云端选项，两者在“文字识别”页面配置。
 
 ## 功能演示
 
@@ -24,9 +24,7 @@
 
 ### 划词翻译
 
-选中文字后点击附近的圆形“译”按钮，浮窗仅显示译文，保留段落并合并 PDF 排版断行；支持多个译文窗口独立置顶和调整尺寸，内容较多时自动扩大窗口。
-
-![划词翻译演示](pot-desktop/asset/selection-pinned-preview.png)
+选中文字后点击附近的圆形“译”按钮，或使用划词快捷键，在旧版翻译窗口中编辑原文、选择语言并查看多个服务的译文。
 
 ![圆形划词按钮演示](pot-desktop/asset/selection-badge-preview.png)
 
