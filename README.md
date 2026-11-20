@@ -4,7 +4,7 @@
 
 [下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.3.7 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.3.7)
 
-3.3.7 默认使用火山 TTS，移除 Lingva 语音服务和“添加内置服务”入口，并修复长文朗读、服务失败切换及错误提示。OCR 使用 Paddle 官方云端服务，模型和 API Key 在“文字识别”页面配置。
+3.3.7 默认使用火山 TTS，移除 Lingva 语音服务和“添加内置服务”入口，并修复长文朗读、服务失败切换及错误提示。当前源码 3.3.9 新增默认 RapidOCR 本地识别，同时保留 Paddle 官方云端选项；两者在“文字识别”页面配置。
 
 ## 功能演示
 
@@ -40,13 +40,13 @@
 ## 开始使用
 
 1. 从 [Releases](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) 下载简体中文 MSI；校验文件随安装包提供。
-2. 在“服务设置”配置翻译或离线引擎；在“文字识别”选择 Paddle OCR 云端模型并填写 AI Studio 访问令牌；同声传译在对应页面配置 STT。
+2. 在“服务设置”配置翻译或离线引擎；在“文字识别”安装默认 RapidOCR 本地引擎，或切换为 Paddle OCR 并填写 AI Studio 访问令牌；同声传译在对应页面配置 STT。
 3. 在“热键设置”配置截图及划词快捷键，划词开关与服务选项位于“翻译设置”。
 
 ## 推荐配置
 
 1. 翻译：Google翻译+腾讯交互翻译（插件）+硅基流动翻译插件
-2. OCR：内置 Paddle OCR 官方云端服务，支持 PP-OCRv5（截图推荐）、PP-OCRv6、PP-OCRv5-latin；不再使用 OCR 插件或本地部署。
+2. OCR：默认 RapidOCR 本地识别，安装后无需 API Key；可切换 Paddle OCR 官方云端服务，支持 PP-OCRv5、PP-OCRv6、PP-OCRv5-latin。
 3. 翻译插件可在 pot translate 插件官网查找。
 4. 云端服务需要自行提供凭据，发布文件不含个人配置。窗口材质取决于 Windows 支持情况；首次安装运行时或离线模型可能需要联网。
 

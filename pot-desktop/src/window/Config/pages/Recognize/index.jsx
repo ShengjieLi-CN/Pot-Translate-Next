@@ -7,9 +7,13 @@ import { Input, Select, SelectItem, Link } from '@nextui-org/react';
 import { open } from '@tauri-apps/api/shell';
 import { DEFAULT_PADDLE_CONFIG, PADDLE_MODELS } from '../../../../utils/paddle_ocr.mjs';
 
+import RapidOcrPanel from '../../../../components/RapidOcrPanel';
+import { DEFAULT_OCR_PROVIDER, DEFAULT_RAPID_CONFIG } from '../../../../utils/ocr_provider.mjs';
 import { useConfig } from '../../../../hooks';
 
 export default function Recognize() {
+    const [provider, setProvider] = useConfig('ocr_provider', DEFAULT_OCR_PROVIDER);
+    const [rapidConfig, setRapidConfig] = useConfig('rapid_ocr', DEFAULT_RAPID_CONFIG);
     const [paddleConfig, setPaddleConfig] = useConfig('paddle_ocr', DEFAULT_PADDLE_CONFIG);
     const [deleteNewline, setDeleteNewline] = useConfig('recognize_delete_newline', false);
     const [autoCopy, setAutoCopy] = useConfig('recognize_auto_copy', false);
@@ -19,9 +23,43 @@ export default function Recognize() {
     return (
         <Card className='mb-[10px]'>
             <CardBody>
+                {provider !== null && (
+                    <Select
+                        label='默认 OCR 引擎'
+                        aria-label='默认 OCR 引擎'
+                        className='mb-5'
+                        disallowEmptySelection
+                        selectedKeys={[provider]}
+                        onChange={(e) => e.target.value && setProvider(e.target.value)}
+                    >
+                        <SelectItem key='rapidocr'>RapidOCR（默认 · 本地）</SelectItem>
+                        <SelectItem key='paddle'>Paddle OCR（云端）</SelectItem>
+                    </Select>
+                )}
+                <h2 className='text-lg font-semibold mb-3'>RapidOCR</h2>
+                <p className='text-sm text-default-500 mb-3'>
+                    使用 RapidOCR 3.10.0 / PP-OCRv6 轻量模型，支持中英文截图识别。模型随引擎安装，无需配置密钥。
+                </p>
+                <RapidOcrPanel />
+                {rapidConfig !== null && (
+                    <Select
+                        label='CPU 线程数'
+                        aria-label='RapidOCR CPU 线程数'
+                        className='my-4'
+                        disallowEmptySelection
+                        selectedKeys={[String(rapidConfig.threads ?? 2)]}
+                        onChange={(e) => e.target.value && setRapidConfig({ threads: Number(e.target.value) })}
+                    >
+                        {[1, 2, 4, 8].map((threads) => (
+                            <SelectItem
+                                key={String(threads)}
+                            >{`${threads} 线程${threads === 2 ? '（默认）' : ''}`}</SelectItem>
+                        ))}
+                    </Select>
+                )}
                 <h2 className='text-lg font-semibold mb-3'>Paddle OCR</h2>
                 <p className='text-sm text-default-500 mb-4'>
-                    所有图片识别与截图翻译统一使用 Paddle OCR 云端服务。图片将发送至官方服务识别，无需安装本地模型。
+                    切换默认 OCR 引擎为 Paddle OCR 后生效。图片将发送至官方云端服务识别，无需安装本地模型。
                 </p>
                 {paddleConfig !== null && (
                     <div className='flex flex-col gap-4 mb-5'>

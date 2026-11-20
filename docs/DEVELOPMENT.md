@@ -18,7 +18,7 @@ pnpm dev --host 127.0.0.1 --port 5173
 
 ## 浏览器回归
 
-OCR 回归不使用真实密钥。脚本模拟 Tauri IPC、Paddle 响应和翻译服务，实际运行图片解码、像素检测、布局和窗口逻辑。
+OCR 回归不使用真实密钥。脚本模拟 Tauri IPC、RapidOCR / Paddle 响应和翻译服务，实际运行图片解码、像素检测、布局和窗口逻辑。
 
 保持 Vite 运行，在第二个 PowerShell 中执行：
 
@@ -36,6 +36,7 @@ pnpm run test:ui:ocr
 | 验证入口 | 覆盖行为 |
 | --- | --- |
 | `pnpm test` | OCR 协议、缓存、贴边文字、无空格圆点、原图像素分段、多栏、并发与取消，以及划词、字幕、更新判断 |
+| `.scripts/verify-rapidocr-ui.cjs` | 默认迁移、设置顺序、线程数、保留 Paddle 密钥、三个识别入口及缺失运行环境时不上传云端 |
 | `.scripts/verify-paddle-screenshot-ui.cjs` | Paddle 设置保存、三个识别入口、缺失密钥及旧提供商配置忽略 |
 | `.scripts/verify-screenshot-ui.cjs` | 框选、原图对照、复制、服务切换、重试、重新截图与空结果 |
 | `.scripts/verify-complex-screenshot-ui.cjs` | 复杂图文、颜色遮罩、150% DPI 与文字自适应 |
@@ -54,3 +55,13 @@ rustup run stable-x86_64-pc-windows-msvc cargo test --manifest-path src-tauri/Ca
 ```
 
 依赖真实设备或离线模型的原生测试可能标记为忽略，发布记录应明确实际执行与跳过的数量。MSI 构建、校验和发布请使用 [发布流程](RELEASING.md)。
+
+## RapidOCR 真实运行环境验证
+
+按“文字识别 → RapidOCR”安装运行环境后，在 Windows 设置 `POT_RAPIDOCR_TEST_ROOT` 为版本化引擎目录，`POT_RAPIDOCR_TEST_IMAGE` 为测试图片的绝对路径，然后执行：
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc --release --features custom-protocol --locked rapidocr::tests::real_offline_worker_keeps_requests_in_sync -- --ignored
+```
+
+测试实际启动本地进程，检查文字与坐标，并验证错误请求不会污染后续结果。安装器另外使用合成图片验证禁用网络连接后仍可识别。下载依赖更新时重新生成锁定清单并进行真实自检；不得省略 SHA-256 校验。

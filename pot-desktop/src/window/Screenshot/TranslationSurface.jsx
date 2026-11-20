@@ -7,8 +7,9 @@ import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
 import { getServiceName, whetherPluginService } from '../../utils/service_instance';
 import { invoke_plugin } from '../../utils/invoke_plugin';
-import { recognizeLayout } from '../../services/recognize/paddle';
-import { DEFAULT_PADDLE_CONFIG } from '../../utils/paddle_ocr.mjs';
+import { recognizeLayout } from '../../services/recognize';
+import { useOcrConfig } from '../../hooks/useOcrConfig';
+import { OCR_LABELS } from '../../utils/ocr_provider.mjs';
 import * as translateServices from '../../services/translate';
 import detect from '../../utils/lang_detect';
 import {
@@ -99,7 +100,7 @@ function FittedBlock({ block, width, height, scale, colors }) {
 export default function TranslationSurface({ capture, onRecapture, onClose, floating = false }) {
     const { t } = useTranslation();
     const [translateKeys] = useConfig('translate_service_list', defaultTranslations);
-    const [paddleConfig] = useConfig('paddle_ocr', DEFAULT_PADDLE_CONFIG);
+    const ocrSelection = useOcrConfig();
     const [target, setTarget] = useConfig('screenshot_target_language', 'zh_cn');
     const [source, setSource] = useState('auto');
     const [services, setServices] = useState(null);
@@ -187,7 +188,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
     }, [translateKeys, resourceRetry]);
 
     useEffect(() => {
-        if (!services || !capture || !target || paddleConfig === null) return;
+        if (!services || !capture || !target || ocrSelection === null) return;
         const current = ++revision.current;
         const isCurrent = () => revision.current === current;
         setError('');
@@ -202,16 +203,16 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
             if (!service) return;
             const cacheKey = capture.id;
             // Object identity invalidates the cache on credential/model changes without embedding the key.
-            if (ocrCache.current?.config !== paddleConfig) ocrCache.current = null;
+            if (ocrCache.current?.config !== ocrSelection) ocrCache.current = null;
             let recognized = ocrCache.current?.key === cacheKey ? ocrCache.current.blocks : null;
             if (!recognized) {
                 setStatus('recognizing');
                 const image = pixelsRequest.current?.capture === capture ? pixelsRequest.current.request : null;
-                const result = await recognizeLayout(capture.base64, 'auto', { config: paddleConfig, isCurrent });
+                const result = await recognizeLayout(capture.base64, 'auto', { selection: ocrSelection, isCurrent });
                 const originalPixels = await image;
                 if (!isCurrent()) return;
                 recognized = screenshotBlocks(result, capture.width, capture.height, originalPixels);
-                if (recognized.length) ocrCache.current = { key: cacheKey, config: paddleConfig, blocks: recognized };
+                if (recognized.length) ocrCache.current = { key: cacheKey, config: ocrSelection, blocks: recognized };
             }
             if (!recognized.length) throw new Error(t('screenshot.no_text'));
             const context = recognized.map((b) => b.text).join('\n\n');
@@ -265,7 +266,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
         return () => {
             revision.current++;
         };
-    }, [capture, services, translator, target, source, paddleConfig, t]);
+    }, [capture, services, translator, target, source, ocrSelection, t]);
 
     useEffect(() => {
         const node = surfaceRef.current;
@@ -421,7 +422,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                         className='text-sm'
                         title='在文字识别设置中配置模型与 API Key'
                     >
-                        Paddle OCR
+                        {OCR_LABELS[ocrSelection?.provider] || '文字识别'}
                     </span>
                     <button
                         onClick={() => setOriginal(!original)}

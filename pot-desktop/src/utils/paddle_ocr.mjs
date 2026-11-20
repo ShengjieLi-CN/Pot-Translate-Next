@@ -1,3 +1,4 @@
+import { createOcrRecognizer } from './ocr_cache.mjs';
 // Protocol: PaddlePaddle/PaddleOCR api_sdk/typescript/src/internal/http.ts.
 export const PADDLE_MODELS = ['PP-OCRv5', 'PP-OCRv6', 'PP-OCRv5-latin'];
 export const DEFAULT_PADDLE_CONFIG = { model: 'PP-OCRv5', apiKey: '' };
@@ -174,42 +175,16 @@ export async function requestPaddleOcr(
     return result.text.trim() || !retryEmpty ? result : recognizeOnce(true);
 }
 
-// One short-lived successful image per window; failures and empty detections are never cached.
-// Subscribers share an in-flight job, but cancelling one view cannot cancel another active view.
-export function createPaddleRecognizer(run, { now = Date.now, ttlMs = 120000 } = {}) {
-    let cached = null;
-    const pending = new Set();
-    const same = (entry, image, model, apiKey) =>
-        entry.image === image && entry.model === model && entry.apiKey === apiKey;
-    return async (image, config, isCurrent = () => true) => {
-        const model = config?.model || DEFAULT_PADDLE_CONFIG.model;
-        const apiKey = String(config?.apiKey || '').trim();
-        if (!isCurrent()) throw new Error('已取消文字识别。');
-        if (cached && (cached.until <= now() || cached.model !== model || cached.apiKey !== apiKey)) cached = null;
-        if (cached && same(cached, image, model, apiKey)) return cached.result;
-        let entry = [...pending].find(
-            (item) => same(item, image, model, apiKey) && [...item.users].some((active) => active())
+export function createPaddleRecognizer(run, options) {
+    const recognize = createOcrRecognizer(run, options);
+    return (image, config, isCurrent) =>
+        recognize(
+            image,
+            {
+                ...config,
+                model: config?.model || DEFAULT_PADDLE_CONFIG.model,
+                apiKey: String(config?.apiKey || '').trim(),
+            },
+            isCurrent
         );
-        const subscriber = () => isCurrent();
-        if (!entry) {
-            entry = { image, model, apiKey, users: new Set([subscriber]) };
-            pending.add(entry);
-            entry.promise = Promise.resolve()
-                .then(() => run(image, { ...config, model, apiKey }, () => [...entry.users].some((active) => active())))
-                .then((result) => {
-                    if (result.text?.trim() && [...entry.users].some((active) => active())) {
-                        cached = { image, model, apiKey, result, until: now() + ttlMs };
-                    }
-                    return result;
-                })
-                .finally(() => pending.delete(entry));
-        } else entry.users.add(subscriber);
-        try {
-            const result = await entry.promise;
-            if (!isCurrent()) throw new Error('已取消文字识别。');
-            return result;
-        } finally {
-            entry.users.delete(subscriber);
-        }
-    };
 }

@@ -6,6 +6,7 @@ mod quark;
 mod clipboard;
 mod cmd;
 mod config;
+mod rapidocr;
 mod tts_defaults;
 mod error;
 mod hotkey;
@@ -139,6 +140,9 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            rapidocr::rapidocr_status,
+            rapidocr::rapidocr_install,
+            rapidocr::rapidocr_recognize,
             libretranslate::libretranslate_status,
             libretranslate::libretranslate_install,
             libretranslate::libretranslate_translate,

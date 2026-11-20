@@ -10,14 +10,14 @@ import { useTranslation } from 'react-i18next';
 
 import { recognizeFlagAtom } from '../ControlArea';
 import { useConfig } from '../../../hooks';
-import { recognize } from '../../../services/recognize/paddle';
-import { DEFAULT_PADDLE_CONFIG } from '../../../utils/paddle_ocr.mjs';
+import { recognize } from '../../../services/recognize';
+import { useOcrConfig } from '../../../hooks/useOcrConfig';
 import { base64Atom } from '../ImageArea';
 
 export const textAtom = atom();
 
 export default function TextArea() {
-    const [paddleConfig] = useConfig('paddle_ocr', DEFAULT_PADDLE_CONFIG);
+    const ocrSelection = useOcrConfig();
     const [autoCopy] = useConfig('recognize_auto_copy', false);
     const [deleteNewline] = useConfig('recognize_delete_newline', false);
     const [hideWindow] = useConfig('recognize_hide_window', false);
@@ -33,9 +33,9 @@ export default function TextArea() {
         setText('');
         setError('');
         setLoading(false);
-        if (base64 && paddleConfig !== null && autoCopy !== null && deleteNewline !== null && hideWindow !== null) {
+        if (base64 && ocrSelection !== null && autoCopy !== null && deleteNewline !== null && hideWindow !== null) {
             setLoading(true);
-            recognize(base64, 'auto', { config: paddleConfig, joinLines: deleteNewline, isCurrent: () => current })
+            recognize(base64, 'auto', { selection: ocrSelection, joinLines: deleteNewline, isCurrent: () => current })
                 .then(async (text) => {
                     if (!current) return;
                     setText(text);
@@ -54,7 +54,7 @@ export default function TextArea() {
         return () => {
             current = false;
         };
-    }, [base64, paddleConfig, recognizeFlag, autoCopy, deleteNewline, hideWindow]);
+    }, [base64, ocrSelection, recognizeFlag, autoCopy, deleteNewline, hideWindow]);
 
     return (
         <Card

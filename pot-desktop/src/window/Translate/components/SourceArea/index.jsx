@@ -16,7 +16,7 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { activeSentenceAtom, bilingualModeAtom, bilingualDirectionAtom, sourceDraftAtom } from '../../alignment';
 import { splitSentences, bilingualLanguages } from '../../../../utils/sentence_alignment.mjs';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
-import { recognize } from '../../../../services/recognize/paddle';
+import { recognize } from '../../../../services/recognize';
 import detect from '../../../../utils/lang_detect';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';

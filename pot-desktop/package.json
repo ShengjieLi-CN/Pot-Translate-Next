@@ -1,7 +1,7 @@
 {
     "name": "pot",
     "private": true,
-    "version": "3.3.8",
+    "version": "3.3.9",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -11,7 +11,7 @@
         "tauri": "tauri",
         "updater": "node updater/updater.mjs",
         "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs",
-        "test:ui:ocr": "node .scripts/verify-paddle-screenshot-ui.cjs && node .scripts/verify-screenshot-ui.cjs && node .scripts/verify-complex-screenshot-ui.cjs && node .scripts/verify-bullet-screenshot-ui.cjs"
+        "test:ui:ocr": "node .scripts/verify-rapidocr-ui.cjs && node .scripts/verify-paddle-screenshot-ui.cjs && node .scripts/verify-screenshot-ui.cjs && node .scripts/verify-complex-screenshot-ui.cjs && node .scripts/verify-bullet-screenshot-ui.cjs"
     },
     "dependencies": {
         "@nextui-org/react": "^2.4.8",

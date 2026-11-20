@@ -101,10 +101,13 @@ pub fn check_service_available() -> Result<(), Error> {
     let plugin_translate_list: Vec<String> = get_plugin_list("translate").unwrap_or_default();
     let plugin_tts_list: Vec<String> = get_plugin_list("tts").unwrap_or_default();
     let plugin_collection_list: Vec<String> = get_plugin_list("collection").unwrap_or_default();
-    // OCR has a single built-in cloud provider. Preserve old credentials on disk,
-    // but never use a restored legacy provider list to select an OCR implementation.
-    if get("recognize_service_list") != Some(json!(["paddle"])) {
-        set("recognize_service_list", vec!["paddle"]);
+    // Only these two OCR engines are supported. Preserve a saved choice and
+    // existing cloud credentials; old provider lists cannot override this choice.
+    if get("ocr_provider").is_none() {
+        set("ocr_provider", "rapidocr");
+    }
+    if get("recognize_service_list") != Some(json!(["rapidocr", "paddle"])) {
+        set("recognize_service_list", vec!["rapidocr", "paddle"]);
     }
     if let Some(translate_service_list) = get("translate_service_list") {
         let translate_service_list: Vec<String> = serde_json::from_value(translate_service_list)?;

@@ -65,6 +65,7 @@ async function installMock(page, options = {}) {
                 translate_detect_engine: 'local',
                 translate_service_list: options.noService ? [] : ['openai@test', 'openai@second'],
                 recognize_service_list: ['system', 'plugin.com.pot-app.paddle@legacy'],
+                ocr_provider: options.ocrProvider ?? 'paddle',
                 paddle_ocr: { model: 'PP-OCRv6', apiKey: 'fake-paddle-key' },
                 recognize_language: 'auto',
                 'openai@test': {
@@ -142,6 +143,15 @@ async function installMock(page, options = {}) {
                     window.__fixture.calls.push(request);
                     if (cmd === 'plugin:store|get') result = settings[request.key] ?? null;
                     else if (cmd === 'plugin:store|set') settings[request.key] = request.value;
+                    else if (cmd === 'rapidocr_status') result = { ready: true, installing: false, version: '3.10.0' };
+                    else if (cmd === 'rapidocr_recognize') result = {
+                        text: paragraphs.map(([text]) => text).join('\n'),
+                        width: cropWidth, height: cropHeight,
+                        lines: paragraphs.map(([text, x, y, width, height]) => ({ text, box: {
+                            x: x * cropWidth / 870, y: y * cropHeight / 300,
+                            width: width * cropWidth / 870, height: height * cropHeight / 300,
+                        }})),
+                    };
                     else if (cmd === 'screenshot_translate_mode') result = window.__fixture.mode;
                     else if (cmd === 'get_base64') result = cropped;
                     else if (cmd === 'lang_detect') result = 'en';
