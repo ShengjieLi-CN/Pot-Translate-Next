@@ -176,7 +176,7 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         }
         if plugin_type == "recognize" {
             return Err(Error::Error(
-                "文字识别已统一为 Paddle OCR 云端服务，请在文字识别设置中配置模型和 API Key。".into(),
+                "文字识别已统一为本地 RapidOCR 推理模型，请在文字识别设置中安装和配置。".into(),
             ));
         }
         if zip.by_name("main.js").is_err() {

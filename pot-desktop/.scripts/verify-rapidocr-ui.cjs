@@ -14,9 +14,9 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
         await installMock(settings, { label: 'config', ocrProvider: 'rapidocr' });
         await settings.goto(url + '/recognize');
         await settings.getByText('RapidOCR 已就绪', { exact: false }).waitFor();
-        const rapid = await settings.getByRole('heading', { name: 'RapidOCR', exact: true }).boundingBox();
-        const paddle = await settings.getByRole('heading', { name: 'Paddle OCR', exact: true }).boundingBox();
-        assert(rapid.y < paddle.y);
+        assert.equal(await settings.getByRole('heading', { name: 'RapidOCR', exact: true }).count(), 1);
+        assert.equal(await settings.getByRole('heading', { name: 'Paddle OCR', exact: true }).count(), 0);
+        assert.equal(await settings.getByRole('button', { name: /默认 OCR 引擎/ }).count(), 0);
         await settings.getByRole('button', { name: /RapidOCR CPU 线程数/ }).click();
         await settings.getByRole('option', { name: '4 线程', exact: true }).click();
         await settings.waitForFunction(() =>
@@ -24,16 +24,8 @@ const { installMock } = require('./verify-screenshot-ui.cjs');
                 (c) => c.cmd === 'plugin:store|set' && c.key === 'rapid_ocr' && c.value.threads === 4
             )
         );
-        await settings.getByRole('button', { name: /默认 OCR 引擎/ }).click();
-        await settings.getByRole('option', { name: 'Paddle OCR（云端）', exact: true }).click();
-        await settings.waitForFunction(() =>
-            window.__fixture.calls.some(
-                (c) => c.cmd === 'plugin:store|set' && c.key === 'ocr_provider' && c.value === 'paddle'
-            )
-        );
-        assert.equal(await settings.locator('input[type=password]').inputValue(), 'fake-paddle-key');
         await settings.screenshot({ path: process.env.RAPIDOCR_SETTINGS_SCREENSHOT || '/tmp/pot-rapidocr-settings.png' });
-        console.log('RapidOCR settings: order, CPU threads, provider persistence and retained Paddle key passed');
+        console.log('RapidOCR settings: local-only UI and CPU threads persistence passed');
 
         for (const label of ['screenshot', 'recognize', 'translate', 'recognize-unavailable']) {
             const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });

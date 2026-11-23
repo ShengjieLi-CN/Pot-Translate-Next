@@ -9,7 +9,7 @@
             "title": "截图翻译", "description": "框选屏幕上的文字，译文直接覆盖原图区域，保留论文段落和双栏布局。支持切换原图对照。",
             "start": "开始截图翻译", "configure_hotkey": "设置截图快捷键", "configure_services": "配置翻译服务",
             "rules": "自动恢复 PDF 换行断词，忽略触及截图边缘的残缺文字；结合全文领域使用专业术语，保留标题、摘要、段落、公式、代码和英文缩写。",
-            "service_hint": "先在“文字识别”安装 RapidOCR 或配置 Paddle OCR，再在“服务设置”配置文本翻译服务。使用支持自定义提示词的模型服务可结合全文执行专业术语与纠错规则；普通翻译服务的术语质量取决于服务本身。RapidOCR 在本机识别图片；选择 Paddle OCR 时图片发送至其官方云端。识别文字会发送至所选翻译服务。",
+            "service_hint": "先在“文字识别”安装 RapidOCR，再在“服务设置”配置文本翻译服务。使用支持自定义提示词的模型服务可结合全文执行专业术语与纠错规则；普通翻译服务的术语质量取决于服务本身。RapidOCR 在本机识别图片；识别文字会发送至所选翻译服务。",
             "select_hint": "拖动框选翻译区域 · Esc 或右键退出",
             "original": "截图原图", "source_language": "原文语言", "target_language": "译文语言", "translation_service": "翻译服务", "ocr_service": "文字识别服务",
             "show_original": "查看原图", "show_translation": "查看译文", "copy": "复制译文", "copied": "译文已复制", "retry": "重试", "recapture": "重新截图", "close": "关闭",
@@ -21,18 +21,9 @@
             "domains": { "general": "通用领域", "biomedicine": "生物医学", "computer_science": "计算机科学", "physics": "物理", "literature": "文学" }
         },
         "bilingual": {
-            "mode": "翻译模式",
-            "title": "英汉互译",
-            "standard": "常规翻译",
-            "direction": "翻译方向",
-            "auto": "英汉互译 · 自动",
-            "en_zh": "英语 → 简体中文",
-            "zh_en": "简体中文 → 英语",
-            "hint": "逐句对照：悬停译文或用 Tab 聚焦，对应原句和译句将同步高亮。Enter 翻译，Shift+Enter 换行。",
             "source": "输入原文",
             "target": "逐句译文",
-            "placeholder": "输入英文或中文，按 Enter 翻译…",
-            "text_only_error": "此服务返回词典结果，无法进行多句对照。请切换到文本翻译服务或常规翻译模式。"
+            "text_only_error": "此服务返回词典结果，无法进行多句对照。请切换到文本翻译服务。"
         },
         "common": {
             "ok": "确定",

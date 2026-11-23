@@ -21,18 +21,9 @@
             "domains": { "general": "General", "biomedicine": "Biomedicine", "computer_science": "Computer science", "physics": "Physics", "literature": "Literature" }
         },
         "bilingual": {
-            "mode": "Translation mode",
-            "title": "English ↔ Chinese",
-            "standard": "Standard translation",
-            "direction": "Translation direction",
-            "auto": "English ↔ Chinese · Auto",
-            "en_zh": "English → Chinese",
-            "zh_en": "Chinese → English",
-            "hint": "Sentence alignment: hover over a translation or focus it with Tab to highlight its source. Enter to translate; Shift+Enter for a new line.",
             "source": "Source text",
             "target": "Aligned translation",
-            "placeholder": "Type English or Chinese, then press Enter…",
-            "text_only_error": "This service returned dictionary data. Choose a text translation service or use standard mode to translate multiple sentences."
+            "text_only_error": "This service returned dictionary data. Choose a text translation service to translate multiple sentences."
         },
         "common": {
             "ok": "OK",

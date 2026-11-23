@@ -13,14 +13,13 @@ import { textAtom } from '../TextArea';
 export const recognizeFlagAtom = atom();
 
 export default function ControlArea() {
-    const [provider] = useConfig('ocr_provider', DEFAULT_OCR_PROVIDER);
     const [serverPort] = useConfig('server_port', 60828);
     const setRecognizeFlag = useSetAtom(recognizeFlagAtom);
     const text = useAtomValue(textAtom);
     const { t } = useTranslation();
     return (
         <div className='flex justify-between px-[12px] h-full'>
-            <span className='my-auto text-sm'>{OCR_LABELS[provider] || '文字识别'}</span>
+            <span className='my-auto text-sm'>{OCR_LABELS[DEFAULT_OCR_PROVIDER] || '文字识别'}</span>
             <Button
                 variant='flat'
                 color='secondary'

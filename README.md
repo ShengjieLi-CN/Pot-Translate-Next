@@ -2,9 +2,9 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.4.0 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.4.0)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.4.1 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.4.1)
 
-3.4.0 将划词按钮和快捷键统一接入旧版翻译窗口，保留原文编辑、语言选择和多服务译文卡片，并移除独立“仅译文”窗口及专属设置。仅面向 Windows。默认使用 RapidOCR 本地识别，同时保留 Paddle 官方云端选项，两者在“文字识别”页面配置。
+3.4.1 将划词翻译窗口合并为常规翻译模式，移除“英汉互译 / 常规翻译”顶部切换栏；文字识别移除云端 Paddle OCR 配置，仅保留本地 RapidOCR 推理模型。仅面向 Windows。
 
 ## 功能演示
 
@@ -38,13 +38,13 @@
 ## 开始使用
 
 1. 从 [Releases](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) 下载简体中文 MSI；校验文件随安装包提供。
-2. 在“服务设置”配置翻译或离线引擎；在“文字识别”安装默认 RapidOCR 本地引擎，或切换为 Paddle OCR 并填写 AI Studio 访问令牌；同声传译在对应页面配置 STT。
+2. 在“服务设置”配置翻译或离线引擎；在“文字识别”安装本地 RapidOCR 推理模型；同声传译在对应页面配置 STT。
 3. 在“热键设置”配置截图及划词快捷键，划词开关与服务选项位于“翻译设置”。
 
 ## 推荐配置
 
 1. 翻译：Google翻译+腾讯交互翻译（插件）+硅基流动翻译插件
-2. OCR：默认 RapidOCR 本地识别，安装后无需 API Key；可切换 Paddle OCR 官方云端服务，支持 PP-OCRv5、PP-OCRv6、PP-OCRv5-latin。
+2. OCR：本地 RapidOCR 推理模型（RapidOCR 3.10.0 / PP-OCRv6），安装后无需 API Key。
 3. 翻译插件可在 pot translate 插件官网查找。
 4. 云端服务需要自行提供凭据，发布文件不含个人配置。窗口材质取决于 Windows 支持情况；首次安装运行时或离线模型可能需要联网。
 

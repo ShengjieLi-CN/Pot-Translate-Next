@@ -21,11 +21,6 @@ export function splitSentences(text) {
     return parts;
 }
 
-export function bilingualLanguages(text, direction) {
-    const from = direction === 'auto' ? (/[\u3400-\u9fff\uf900-\ufaff]/u.test(text) ? 'zh_cn' : 'en') : direction;
-    return { from, to: from === 'en' ? 'zh_cn' : 'en' };
-}
-
 export function joinTranslations(parts) {
     return parts.map((part) => `${part.separatorBefore ?? ''}${part.translation}${part.separatorAfter ?? ''}`).join('');
 }

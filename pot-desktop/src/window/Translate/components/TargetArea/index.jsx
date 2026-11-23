@@ -37,8 +37,8 @@ import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
-import { activeSentenceAtom, bilingualDirectionAtom, bilingualModeAtom, sourceDraftAtom } from '../../alignment';
-import { bilingualLanguages, joinTranslations, translateSentences } from '../../../../utils/sentence_alignment.mjs';
+import { activeSentenceAtom, sourceDraftAtom } from '../../alignment';
+import { joinTranslations, translateSentences } from '../../../../utils/sentence_alignment.mjs';
 
 import { info, error as logError } from 'tauri-plugin-log-api';
 import {
@@ -82,9 +82,7 @@ export default function TargetArea(props) {
     const [result, setResult] = useState('');
     const [alignedSentences, setAlignedSentences] = useState([]);
     const [activeSentence, setActiveSentence] = useAtom(activeSentenceAtom);
-    const bilingualMode = useAtomValue(bilingualModeAtom);
-    const sentenceAlignment = embedded || bilingualMode;
-    const bilingualDirection = useAtomValue(bilingualDirectionAtom);
+    const sentenceAlignment = embedded;
     const requestId = useRef(null);
     const [error, setError] = useState('');
 
@@ -92,11 +90,8 @@ export default function TargetArea(props) {
     const sourceDraft = useAtomValue(sourceDraftAtom);
     const draftReady = !embedded || sourceDraft === sourceText;
     const canHighlight = sourceDraft.trim() === sourceText.trim();
-    const configuredSourceLanguage = useAtomValue(sourceLanguageAtom);
-    const configuredTargetLanguage = useAtomValue(targetLanguageAtom);
-    const bilingualPair = bilingualLanguages(sourceText, bilingualDirection);
-    const sourceLanguage = bilingualMode ? bilingualPair.from : configuredSourceLanguage;
-    const targetLanguage = bilingualMode ? bilingualPair.to : configuredTargetLanguage;
+    const sourceLanguage = useAtomValue(sourceLanguageAtom);
+    const targetLanguage = useAtomValue(targetLanguageAtom);
     const [autoCopy] = useConfig('translate_auto_copy', 'disable');
     const [hideWindow] = useConfig('translate_hide_window', false);
     const [clipboardMonitor] = useConfig('clipboard_monitor', false);
@@ -153,8 +148,6 @@ export default function TargetArea(props) {
         hideWindow,
         currentTranslateServiceInstanceKey,
         clipboardMonitor,
-        bilingualMode,
-        bilingualDirection,
         embedded,
     ]);
 

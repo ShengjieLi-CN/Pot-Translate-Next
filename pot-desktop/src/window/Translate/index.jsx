@@ -8,10 +8,7 @@ import { AiFillCloseCircle } from 'react-icons/ai';
 import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { BsPinFill } from 'react-icons/bs';
-import { useAtomValue } from 'jotai';
 
-import BilingualControls from './components/BilingualControls';
-import { bilingualModeAtom } from './alignment';
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
 import TargetArea from './components/TargetArea';
@@ -66,7 +63,6 @@ void listen('tauri://move', () => {
 });
 
 export default function Translate() {
-    const bilingualMode = useAtomValue(bilingualModeAtom);
     const [closeOnBlur] = useConfig('translate_close_on_blur', true);
     const [alwaysOnTop] = useConfig('translate_always_on_top', false);
     const [windowPosition] = useConfig('translate_window_position', 'mouse');
@@ -267,7 +263,6 @@ export default function Translate() {
                 </div>
                 <div className='h-[calc(100vh-35px)] px-[8px]'>
                     <div className='h-full overflow-y-auto'>
-                        <BilingualControls />
                         <div>
                             {serviceInstanceConfigMap !== null && (
                                 <SourceArea
@@ -276,7 +271,7 @@ export default function Translate() {
                                 />
                             )}
                         </div>
-                        <div className={`${(hideLanguage || bilingualMode) && 'hidden'}`}>
+                        <div className={`${hideLanguage && 'hidden'}`}>
                             <LanguageArea />
                             <Spacer y={2} />
                         </div>

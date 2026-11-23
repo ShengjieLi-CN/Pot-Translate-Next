@@ -420,7 +420,7 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                         )}
                     <span
                         className='text-sm'
-                        title='在文字识别设置中配置模型与 API Key'
+                        title='在文字识别设置中配置本地 RapidOCR 模型'
                     >
                         {OCR_LABELS[ocrSelection?.provider] || '文字识别'}
                     </span>

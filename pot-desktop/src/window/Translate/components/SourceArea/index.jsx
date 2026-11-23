@@ -13,8 +13,8 @@ import { HiTranslate } from 'react-icons/hi';
 import { LuDelete } from 'react-icons/lu';
 import { invoke } from '@tauri-apps/api';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activeSentenceAtom, bilingualModeAtom, bilingualDirectionAtom, sourceDraftAtom } from '../../alignment';
-import { splitSentences, bilingualLanguages } from '../../../../utils/sentence_alignment.mjs';
+import { activeSentenceAtom, sourceDraftAtom } from '../../alignment';
+import { splitSentences } from '../../../../utils/sentence_alignment.mjs';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
 import { recognize } from '../../../../services/recognize';
 import detect from '../../../../utils/lang_detect';
@@ -33,10 +33,7 @@ export default function SourceArea(props) {
     const [appFontSize] = useConfig('app_font_size', 16);
     const savedDraft = useAtomValue(sourceDraftAtom);
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom, embedded ? savedDraft : undefined);
-    const bilingualMode = useAtomValue(bilingualModeAtom);
-    const bilingualDirection = useAtomValue(bilingualDirectionAtom);
     const [activeSentence, setActiveSentence] = useAtom(activeSentenceAtom);
-    const setBilingualMode = useSetAtom(bilingualModeAtom);
     const setSourceDraft = useSetAtom(sourceDraftAtom);
     const sourceTextChangeTimer = useRef(null);
     const sourceRevision = useRef(0);
@@ -47,7 +44,7 @@ export default function SourceArea(props) {
     const highlightRef = useRef(null);
     const sourceSentences = useMemo(() => splitSentences(sourceText), [sourceText]);
     const highlight =
-        (embedded || bilingualMode) && activeSentence?.sourceText === sourceText.trim()
+        embedded && activeSentence?.sourceText === sourceText.trim()
             ? sourceSentences[activeSentence.index]
             : null;
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
@@ -75,7 +72,6 @@ export default function SourceArea(props) {
         // 清空检测语言
         setDetectLanguage('');
         if (text === '[INPUT_TRANSLATE]') {
-            setBilingualMode(true);
             setWindowType('[INPUT_TRANSLATE]');
             appWindow.show();
             appWindow.setFocus();
@@ -124,9 +120,7 @@ export default function SourceArea(props) {
         if (!sourceText.trim() || !canTranslate) return;
         const revision = sourceRevision.current;
         try {
-            const language = bilingualMode
-                ? bilingualLanguages(sourceText, bilingualDirection).from
-                : await detect(sourceText);
+            const language = await detect(sourceText);
             if (revision !== sourceRevision.current) return;
             setDetectLanguage(language);
             syncSourceText();
@@ -216,7 +210,7 @@ export default function SourceArea(props) {
     }, []);
 
     const detect_language = async (text) => {
-        setDetectLanguage(bilingualMode ? bilingualLanguages(text, bilingualDirection).from : await detect(text));
+        setDetectLanguage(await detect(text));
     };
 
     useEffect(
@@ -347,7 +341,7 @@ export default function SourceArea(props) {
 
     return (
         <div
-            className={hideSource && !embedded && !bilingualMode && windowType !== '[INPUT_TRANSLATE]' ? 'hidden' : ''}
+            className={hideSource && !embedded && windowType !== '[INPUT_TRANSLATE]' ? 'hidden' : ''}
         >
             <Card
                 shadow='none'
@@ -387,13 +381,7 @@ export default function SourceArea(props) {
                             ref={textAreaRef}
                             className='sentence-source-input'
                             aria-label={t('bilingual.source')}
-                            placeholder={
-                                embedded
-                                    ? t('config.input.placeholder')
-                                    : bilingualMode
-                                      ? t('bilingual.placeholder')
-                                      : undefined
-                            }
+                            placeholder={embedded ? t('config.input.placeholder') : undefined}
                             spellCheck={false}
                             value={sourceText}
                             onKeyDown={keyDown}

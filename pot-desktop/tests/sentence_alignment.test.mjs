@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     splitSentences,
-    bilingualLanguages,
     joinTranslations,
     translateSentences,
 } from '../src/utils/sentence_alignment.mjs';
@@ -52,13 +51,6 @@ test('fallback supports English, Chinese and final unpunctuated text', () => {
     } finally {
         Intl.Segmenter = segmenter;
     }
-});
-
-test('automatic and explicit bilingual directions', () => {
-    assert.deepEqual(bilingualLanguages('Hello', 'auto'), { from: 'en', to: 'zh_cn' });
-    assert.deepEqual(bilingualLanguages('你好 XJTLU', 'auto'), { from: 'zh_cn', to: 'en' });
-    assert.deepEqual(bilingualLanguages('中文引用', 'en'), { from: 'en', to: 'zh_cn' });
-    assert.deepEqual(bilingualLanguages('Hello', 'zh_cn'), { from: 'zh_cn', to: 'en' });
 });
 
 test('alignment follows requests even when a provider splits one translation into two sentences', async () => {
