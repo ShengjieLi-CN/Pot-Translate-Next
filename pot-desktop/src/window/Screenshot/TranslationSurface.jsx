@@ -9,7 +9,6 @@ import { getServiceName, whetherPluginService } from '../../utils/service_instan
 import { invoke_plugin } from '../../utils/invoke_plugin';
 import { recognizeLayout } from '../../services/recognize';
 import { useOcrConfig } from '../../hooks/useOcrConfig';
-import { OCR_LABELS } from '../../utils/ocr_provider.mjs';
 import * as translateServices from '../../services/translate';
 import detect from '../../utils/lang_detect';
 import {
@@ -418,12 +417,6 @@ export default function TranslationSurface({ capture, onRecapture, onClose, floa
                                 remember('screenshot_translate_service', key);
                             }
                         )}
-                    <span
-                        className='text-sm'
-                        title='在文字识别设置中配置本地 RapidOCR 模型'
-                    >
-                        {OCR_LABELS[ocrSelection?.provider] || '文字识别'}
-                    </span>
                     <button
                         onClick={() => setOriginal(!original)}
                         aria-pressed={original}

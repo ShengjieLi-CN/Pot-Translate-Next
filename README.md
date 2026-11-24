@@ -2,9 +2,9 @@
 
 基于 [Pot Desktop](https://github.com/pot-app/pot-desktop) 二次开发的桌面翻译工具，专注中文使用体验。支持自动输入翻译、划词翻译、截图原位翻译和同声传译。
 
-[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.4.1 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.4.1)
+[下载 Windows x64 中文版 MSI](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/latest) · [查看 3.4.2 更新说明](https://github.com/ShengjieLi-CN/Pot-Translate-Next/releases/tag/v3.4.2)
 
-3.4.1 将划词翻译窗口合并为常规翻译模式，移除“英汉互译 / 常规翻译”顶部切换栏；文字识别移除云端 Paddle OCR 配置，仅保留本地 RapidOCR 推理模型。仅面向 Windows。
+3.4.2 移除截图翻译工具栏中的 OCR 选项显示，界面更简洁；仅面向 Windows。
 
 ## 功能演示
 
